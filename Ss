@@ -1,1 +1,78 @@
 
+**VIRA Troubleshooting Guide on Verizon**
+
+**Table of Contents:**
+1. Introduction to VIRA
+2. Common VIRA Issues and Solutions
+3. VIRA Flow for R1 Intent
+4. FWA Flow
+5. Issue Selector Page
+6. Conclusion
+
+**1. Introduction to VIRA:**
+VIRA (Verizon Intelligent Resource Assistant) is a virtual assistant designed to assist Verizon customers with troubleshooting and support queries. Utilizing artificial intelligence and natural language processing, VIRA aims to provide efficient and effective solutions to customer issues.
+
+**2. Common VIRA Issues and Solutions:**
+- **Connectivity Problems:**
+  - Ensure that your device is connected to the internet.
+  - Check for any network outages in your area.
+  - Restart your router or modem and try reconnecting.
+
+- **Billing Inquiries:**
+  - Verify your account details to ensure accuracy.
+  - Review your billing statement for any discrepancies.
+  - Contact Verizon customer support for further assistance if needed.
+
+- **Device Configuration:**
+  - Follow VIRA's step-by-step instructions for device setup.
+  - Ensure that your device is compatible with Verizon's network.
+  - Update your device's software to the latest version.
+
+- **Technical Support:**
+  - Describe the issue clearly to VIRA using natural language.
+  - Follow VIRA's prompts for troubleshooting steps.
+  - If the issue persists, escalate to a live support agent.
+
+**3. VIRA Flow for R1 Intent:**
+R1 Intent in VIRA refers to the initial user request or query. Below is a typical flow for handling R1 Intent using VIRA:
+
+- **User Input:**
+  - The user initiates a conversation with VIRA by typing or speaking their query.
+
+- **Intent Recognition:**
+  - VIRA analyzes the user input to determine the user's intent (e.g., connectivity issue, billing inquiry, technical support).
+
+- **Contextual Understanding:**
+  - VIRA considers contextual information such as the user's account details, device type, and previous interactions to provide personalized assistance.
+
+- **Response Generation:**
+  - Based on the identified intent and contextual understanding, VIRA generates a response tailored to the user's query.
+  
+- **Actionable Steps:**
+  - VIRA provides actionable steps or instructions for the user to follow in order to resolve their issue.
+
+- **Feedback Loop:**
+  - VIRA collects feedback from the user regarding the effectiveness of the provided solution.
+  - If the issue is not resolved, VIRA may offer alternative solutions or escalate the query to a live support agent.
+
+**4. FWA Flow:**
+  - Users interact with the issue selector page, which is static and served by AEM (Adobe Experience Manager).
+  - The flow involves various steps denoted as r1, r3, ..., r9.
+  - The initial user intent, referred to as r1, leads to the Service Order Entry (SOE) system, then to CJCM (Customer Journey Control Manager).
+  - Users are presented with responses for each step and can click on calls-to-action (CTAs) to proceed to the next step.
+  - The flow is tailored for different types of devices, including normal mobile devices, FWA (Fixed Wireless Access) devices, and 3G devices, covering around 1600 intents authored by the authoring team.
+  - The system utilizes PEGA and an admin portal for management.
+  - Troubleshooting links on the support homepage lead to pages such as `/get-recent-pending-case`, `/mtn`, and `/skulD`.
+  - URLs for troubleshooting pages follow a specific format, incorporating details like the device type, SKU ID, and MTN (Mobile Telephone Number) or MTN ID.
+  - React JS files are loaded to facilitate the functionality of the troubleshooting pages.
+  - The router combines different elements of the troubleshooting process.
+
+**5. Issue Selector Page:**
+  - The issue selector page is device-specific for FWA devices.
+  - The page is generated through a CJCM call (`/get-nsa-symptoms`), which retrieves data from the SOE and CJCM systems.
+  - It includes information such as the CASE ID, intent list, and additional files for troubleshooting.
+
+**6. Conclusion:**
+VIRA on Verizon is a valuable tool for customers seeking assistance with various issues related to their services and devices. By following the troubleshooting steps outlined in this guide and utilizing VIRA's capabilities effectively, customers can resolve their issues efficiently and enjoy a seamless experience with Verizon services.
+
+This document serves as a reference for both users and support personnel when encountering common issues with VIRA on Verizon's platform. For further assistance, users are encouraged to engage with VIRA or contact Verizon customer support for personalized assistance.
