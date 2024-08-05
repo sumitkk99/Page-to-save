@@ -1,59 +1,46 @@
-1
-
 @Test
-void reactiveTroubleshootWithOfferRedemptionTrue() {
+void reactiveTroubleshootWifiAnalyzerEntry_withWhmOfferRedemption() {
     MobileFirstRequestVO request = new MobileFirstRequestVO();
-    request.getRequestParams().put("whwRedeemEligible", "true");
+    request.getRequestParams().put("whmRedeemEligible", "true");
+    request.getRequestParams().put("whmOfferRedemption", "sampleRedemption");
 
-    String expectedBrowserUrl = "https://testurl.com?whmOfferRedemption=true";
-    when(env.getProperty("CPCLandingURL")).thenReturn("https://testurl.com");
-    when(env.getProperty("TROUBLESHOOT_DOMAIN")).thenReturn("");
-    when(env.getProperty(WEB_PUNCH_OUT)).thenReturn("testAemPath");
-
+    // Mock setup
+    when(deviceMgmtUtil.isARSupported(any(), any())).thenReturn(Mono.just(Boolean.TRUE));
     MobileFirstResponseVO response = new MobileFirstResponseVO();
     when(aemHandler.buildResponse(any(), any())).thenReturn(Mono.just(new ResponseEntity<>(response, HttpStatus.OK)));
     when(deviceMgmtUtil.updateNavigationBarByPattern(any(), any(), any(), any(), any())).thenReturn(Mono.just(new ResponseEntity<>(response, HttpStatus.OK)));
+    when(env.getProperty("CPCLandingURL")).thenReturn("https://cpc.example.com");
+    when(env.getProperty("WEB_PUNCH_OUT")).thenReturn("webpunchoutPath");
 
+    // Call the service method
     Mono<ResponseEntity<MobileFirstResponseVO>> result = deviceMgmtServiceImpl.reactiveTroubleshootWifiAnalyzerEntry(serverWebExchange, request);
 
-    assertEquals(HttpStatus.OK, result.block().getStatusCode());
-}
-
-2
-
-
-@Test
-void reactiveTroubleshootWithOfferRedemptionFalseAndARSupported() {
-    MobileFirstRequestVO request = new MobileFirstRequestVO();
-    request.getRequestParams().put("whwRedeemEligible", "false");
-
-    when(deviceMgmtUtil.isARSupported(any(), any())).thenReturn(Mono.just(true));
-
-    MobileFirstResponseVO response = new MobileFirstResponseVO();
-    when(wifiAnalyzerService.wifiAnalyserWelcome(any(), any())).thenReturn(Mono.just(new ResponseEntity<>(response, HttpStatus.OK)));
-
-    Mono<ResponseEntity<MobileFirstResponseVO>> result = deviceMgmtServiceImpl.reactiveTroubleshootWifiAnalyzerEntry(serverWebExchange, request);
-
+    // Assert the result
     assertEquals(HttpStatus.OK, result.block().getStatusCode());
 }
 
 
-3
+
+
+,.........
+
 
 @Test
-void reactiveTroubleshootWithOfferRedemptionFalseAndARNotSupported() {
+void reactiveTroubleshootWifiAnalyzerEntry_fallbackScenario() {
     MobileFirstRequestVO request = new MobileFirstRequestVO();
-    request.getRequestParams().put("whwRedeemEligible", "false");
+    request.getRequestParams().put("whmRedeemEligible", "false");
 
-    when(deviceMgmtUtil.isARSupported(any(), any())).thenReturn(Mono.just(false));
-    when(env.getProperty(REACTIVE_TRB_WIFI_ENTRY_FALLBACK)).thenReturn("https://www.verizon.com/support/5g-home-faqs/");
-    when(env.getProperty(WEB_PUNCH_OUT)).thenReturn("testAemPath");
-
+    // Mock setup
+    when(deviceMgmtUtil.isARSupported(any(), any())).thenReturn(Mono.just(Boolean.FALSE));
     MobileFirstResponseVO response = new MobileFirstResponseVO();
     when(aemHandler.buildResponse(any(), any())).thenReturn(Mono.just(new ResponseEntity<>(response, HttpStatus.OK)));
     when(deviceMgmtUtil.updateNavigationBarByPattern(any(), any(), any(), any(), any())).thenReturn(Mono.just(new ResponseEntity<>(response, HttpStatus.OK)));
+    when(env.getProperty("REACTIVE_TRB_WIFI_ENTRY_FALLBACK")).thenReturn("https://www.verizon.com/support/5g-home-faqs/");
+    when(env.getProperty("WEB_PUNCH_OUT")).thenReturn("fallbackPath");
 
+    // Call the service method
     Mono<ResponseEntity<MobileFirstResponseVO>> result = deviceMgmtServiceImpl.reactiveTroubleshootWifiAnalyzerEntry(serverWebExchange, request);
 
+    // Assert the result
     assertEquals(HttpStatus.OK, result.block().getStatusCode());
 }
