@@ -1,0 +1,177 @@
+omni
+
+Sure! Below is a simplified example of how to implement the three scenarios using Spring Reactive. This is assuming that you have a basic understanding of Spring WebFlux and reactive programming.
+
+### 1. **Data Model**
+We'll start with a simple data model to represent the device and its location violation status.
+
+```java
+public class Device {
+    private String deviceId;
+    private String serviceAddress;
+    private LocalDate violationStartDate;
+    private ViolationStatus violationStatus;
+
+    // Getters and Setters
+
+    public enum ViolationStatus {
+        NO_VIOLATION,
+        VIOLATION_IDENTIFIED,
+        VIOLATION_WARNING,
+        SPEED_CAP_APPLIED
+    }
+}
+```
+
+### 2. **Repository**
+This is a reactive repository interface to interact with the database.
+
+```java
+import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Mono;
+
+public interface DeviceRepository extends ReactiveCrudRepository<Device, String> {
+    Mono<Device> findByDeviceId(String deviceId);
+}
+```
+
+### 3. **Service Layer**
+This service class contains the business logic to handle the location violation scenarios.
+
+```java
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+
+@Service
+public class DeviceService {
+
+    private final DeviceRepository deviceRepository;
+
+    public DeviceService(DeviceRepository deviceRepository) {
+        this.deviceRepository = deviceRepository;
+    }
+
+    public Mono<Device> checkLocationViolation(String deviceId) {
+        return deviceRepository.findByDeviceId(deviceId)
+                .flatMap(device -> {
+                    long daysSinceViolation = ChronoUnit.DAYS.between(device.getViolationStartDate(), LocalDate.now());
+
+                    if (daysSinceViolation == 0) {
+                        device.setViolationStatus(Device.ViolationStatus.VIOLATION_IDENTIFIED);
+                    } else if (daysSinceViolation > 0 && daysSinceViolation <= 7) {
+                        device.setViolationStatus(Device.ViolationStatus.VIOLATION_WARNING);
+                    } else if (daysSinceViolation > 7) {
+                        device.setViolationStatus(Device.ViolationStatus.SPEED_CAP_APPLIED);
+                    }
+
+                    return deviceRepository.save(device);
+                });
+    }
+}
+```
+
+### 4. **Controller Layer**
+This is the reactive REST controller that exposes the endpoint.
+
+```java
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class DeviceController {
+
+    private final DeviceService deviceService;
+
+    public DeviceController(DeviceService deviceService) {
+        this.deviceService = deviceService;
+    }
+
+    @GetMapping("/device/{deviceId}/location-violation")
+    public Mono<String> getLocationViolation(@PathVariable String deviceId) {
+        return deviceService.checkLocationViolation(deviceId)
+                .map(device -> {
+                    switch (device.getViolationStatus()) {
+                        case VIOLATION_IDENTIFIED:
+                            return "Location Violation Identified: Device is identified as not being within their qualified service address. Please see OST page.";
+                        case VIOLATION_WARNING:
+                            return "Location Violation Identified: Speeds may be reduced if no action is taken. Please see OST page.";
+                        case SPEED_CAP_APPLIED:
+                            return "Location Violation Identified: Speed cap applied. Data speeds reduced. Please see OST page.";
+                        default:
+                            return "No violation detected.";
+                    }
+                });
+    }
+}
+```
+
+### 5. **Configuration**
+This example assumes basic Spring Boot setup. If you need to access external services (e.g., for location data), you'll likely need to configure a WebClient:
+
+```java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.reactive.function.client.WebClient;
+
+@Configuration
+public class WebClientConfig {
+
+    @Bean
+    public WebClient.Builder webClientBuilder() {
+        return WebClient.builder();
+    }
+}
+```
+
+### 6. **Testing**
+Basic unit test using JUnit and WebFlux's `WebTestClient`:
+
+```java
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
+
+import static org.mockito.Mockito.when;
+
+@WebFluxTest(DeviceController.class)
+public class DeviceControllerTest {
+
+    @Autowired
+    private WebTestClient webTestClient;
+
+    @MockBean
+    private DeviceService deviceService;
+
+    @Test
+    public void testLocationViolationScenario1() {
+        Device device = new Device();
+        device.setDeviceId("123");
+        device.setViolationStatus(Device.ViolationStatus.VIOLATION_IDENTIFIED);
+
+        when(deviceService.checkLocationViolation("123")).thenReturn(Mono.just(device));
+
+        webTestClient.get().uri("/device/123/location-violation")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .isEqualTo("Location Violation Identified: Device is identified as not being within their qualified service address. Please see OST page.");
+    }
+}
+```
+
+### Summary
+- **Data Model**: `Device` class with a `ViolationStatus` enum.
+- **Repository**: `DeviceRepository` interface to interact with the database.
+- **Service**: `DeviceService` contains business logic for identifying violation scenarios.
+- **Controller**: `DeviceController` exposes an API endpoint to check and return the violation status.
+- **Testing**: `DeviceControllerTest` to validate the controller logic using mock data.
+
+This example is simplified and assumes that certain things, like the existence of device records, are already handled. It also doesn't cover all aspects of a real-world application, such as error handling, security, or database interactions. Those would need to be implemented according to the specifics of your project.
