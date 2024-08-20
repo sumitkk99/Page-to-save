@@ -1,190 +1,160 @@
-To address the location violation scenario, let's assume you want to include additional fields in the API response for `/getCustomerLinesInfo` that reflect this scenario. Here’s how you can structure the new JSON response:
+To integrate the logic for showing a banner based on the "fwaLocationViolationlines" into your existing Spring Boot application, here's how you can proceed:
 
-### Updated JSON Response
+### **1. Modify the Existing Service**
+
+Since you need to add the `"fwaLocationViolationlines"` data to the response of the `/getCustomerLinesInfo` API, you will need to modify the service that handles this API call.
+
+### **Service Class:**
+
+```java
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+
+@Service
+public class CustomerService {
+
+    @Autowired
+    private ExternalService externalService; // Assume this service calls the external API.
+
+    public Mono<Customer> getCustomerInfoWithViolation(GetCustomerInfoRequest request) {
+        return externalService.getCustomerInfo_Lines(request)
+            .flatMap(customer -> addFwaLocationViolationLines(customer, request));
+    }
+
+    private Mono<Customer> addFwaLocationViolationLines(Customer customer, GetCustomerInfoRequest request) {
+        // Assuming you have logic to determine caseStatus based on some conditions.
+        String caseStatus = determineCaseStatus(customer, request);
+
+        // Add the fwaLocationViolationlines to the customer's MTN data.
+        customer.getMtns().forEach(mtn -> {
+            FwaLocationViolationLine violationLine = new FwaLocationViolationLine(mtn.getMtn(), caseStatus);
+            customer.addFwaLocationViolationLine(violationLine);
+        });
+
+        return Mono.just(customer);
+    }
+
+    private String determineCaseStatus(Customer customer, GetCustomerInfoRequest request) {
+        // Your logic to determine the caseStatus. 
+        // For example, based on how many days have passed or based on customer attributes.
+        int daysSinceStart = calculateDaysSinceStart(request);
+
+        if (daysSinceStart >= 1 && daysSinceStart <= 7) {
+            return "Pending-LVSpeedcap";
+        } else if (daysSinceStart >= 8) {
+            return "LVSpeedCapApplied";
+        } else {
+            return "GenericLVSpeedCap";
+        }
+    }
+
+    private int calculateDaysSinceStart(GetCustomerInfoRequest request) {
+        // Implement your logic to calculate the number of days since the customer started the service.
+        return 0; // Replace with actual calculation.
+    }
+}
+```
+
+### **Controller Class:**
+
+```java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class CustomerController {
+
+    @Autowired
+    private CustomerService customerService;
+
+    @PostMapping(value = "/getCustomerLinesInfo")
+    public Mono<Customer> getCustomerLinesInfo(@RequestBody GetCustomerInfoRequest request) {
+        return customerService.getCustomerInfoWithViolation(request);
+    }
+}
+```
+
+### **Customer Class:**
+
+Assume you have a `Customer` class. You'll need to add a list of `FwaLocationViolationLine` to it.
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class Customer {
+
+    private List<MTN> mtns;
+    private List<FwaLocationViolationLine> fwaLocationViolationlines = new ArrayList<>();
+
+    public List<MTN> getMtns() {
+        return mtns;
+    }
+
+    public List<FwaLocationViolationLine> getFwaLocationViolationlines() {
+        return fwaLocationViolationlines;
+    }
+
+    public void addFwaLocationViolationLine(FwaLocationViolationLine violationLine) {
+        this.fwaLocationViolationlines.add(violationLine);
+    }
+}
+```
+
+### **FwaLocationViolationLine Class:**
+
+```java
+public class FwaLocationViolationLine {
+    private String mtn;
+    private String caseStatus;
+
+    public FwaLocationViolationLine(String mtn, String caseStatus) {
+        this.mtn = mtn;
+        this.caseStatus = caseStatus;
+    }
+
+    public String getMtn() {
+        return mtn;
+    }
+
+    public String getCaseStatus() {
+        return caseStatus;
+    }
+}
+```
+
+### **JSON Response Example:**
+
+After adding the logic, the response will include the `fwaLocationViolationlines` as shown below:
 
 ```json
 {
-  "availablePaths": [],
-  "contactAddress": {
-    "state": null
-  },
   "customerName": {
     "firstName": "POSTESTEUHJ",
-    "lastName": "USERZHVA",
-    "businessName": "",
-    "preferFirstName": "",
-    "preferLastName": "",
-    "preferPronoun": ""
+    "lastName": "USERZHVA"
   },
-  "customerAttributes": {
-    "hasEcpd": null,
-    "autoPayDiscountEligibleCustomerType": null,
-    "customerType": "PE",
-    "associationIdNo": 8
-  },
-  "billAccounts": [
+  "mtns": [
     {
-      "billAccountNo": null,
-      "recommendation": {
-        "recommendedPlan": {
-          "usageInfo": {
-            "accountUsageInfo": {
-              "datausageInfos": []
-            },
-            "unbilledAccountUsageInfo": {
-              "totalData": null,
-              "unitOfMeasure": null,
-              "usageType": null,
-              "dataAllowance": null
-            }
-          }
-        }
-      },
-      "billcycle": {
-        "billcycleDate": null,
-        "remainingDays": null,
-        "nextBillCycleAutoRedeemPaymentDate": null
-      },
-      "programEligibility": {},
-      "sharePlan": {
-        "planId": null,
-        "description": null,
-        "chargeAmount": null,
-        "planImageUrl": null
-      },
-      "accountoffers": null,
-      "accountLevelChangeEligibility": {
-        "isAddNewLineAllowed": null,
-        "isBundleChangeAllowed": null,
-        "issharePlanChangeAllowed": null,
-        "pendingOrderDetail": {}
-      },
-      "paymentInfo": {
-        "arPastDueBalance": null,
-        "currentBalance": null,
-        "isBalancePastDue": null,
-        "pastDueBalance": null,
-        "invoicebate": null,
-        "isAutoPayEnrolled": null,
-        "isPaperFreeEnrolled": null,
-        "recentActivityAmount": null,
-        "outstandingBalance": null,
-        "vzwalletInfo": {
-          "eligibleToUseVzDollar": null,
-          "maximumPropositionAmount": null,
-          "minimumPropositionAmount": null,
-          "vzbollarsBalance": null
-        },
-        "vzdAutoRedeemDetails": {
-          "vzdAutoRedeemEnrolled": null,
-          "vzdAutoRedeemAmount": null,
-          "vzdAutoRedeemFullBillAmount": null,
-          "vzdAutoRedeemEnrollDate": null
-        },
-        "lastVzdollarsAutoRedeemAmount": null,
-        "lastVzdollarsAutolitedeemPaymentDate": null,
-        "lastVzPmtDate": null,
-        "currentBCVzdollarsRedeemAmt": null
-      },
-      "accountAttributes": {
-        "isAutoPayWithPaperless": null,
-        "mixedPlanCategories": null,
-        "isOverThreshHold": null,
-        "isCashonly": null,
-        "isCashonlyExceptCA": null,
-        "isCashonlyExceptCC": null,
-        "isCashonlyExceptCo": null,
-        "FraudInfo": null,
-        "isMyVerizonEnrolled": null
-      },
-      "locationViolationDetails": {  // Adding this field
-        "caseId": "12345ABC",       // Example case ID
-        "violationType": "Location Violation",
-        "violationDate": "2024-08-19",
-        "violationDescription": "Speed cap applied due to location violation.",
-        "status": "Active"
-      },
-      "mtns": [
+      "mtn": "9087654321",
+      "status": "A",
+      "fwaLocationViolationlines": [
         {
-          "mtn": "8454179329",
-          "LineLevelServiceoffers": [],
-          "numberShare": "N",
-          "mtnHashCode": "9f6b48af319494aa1eb07d275e8f0647b8d2cf736bd4755e5105265e11b7c91c",
-          "nickName": "POSTESTEUHJ-9329",
-          "benefitpair": {
-            "grantor": false
-          }
+          "mtn": "9087654321",
+          "caseStatus": "Pending-LVSpeedcap"
         }
       ]
     }
-  ],
-  "isSalesRepIdMismatch": false,
-  "isComboOrderAllowed": false,
-  "isFWASimplificationEnabled": false,
-  "homeSalesAddressList": []
+  ]
 }
 ```
 
-### Steps to Implement
+### **Summary:**
 
-1. **Modify the Backend Service**: In the `getCustomerLinesInfo` controller, you'll need to update the `Customer` object (or create a new one if necessary) to include the `locationViolationDetails` field.
+1. **Modify the service layer** to add the `"fwaLocationViolationlines"` section to the customer’s response.
+2. **Integrate the logic** to determine the `caseStatus` based on your business rules (e.g., how many days since a certain event).
+3. **Update the response model** (e.g., `Customer`) to include the new data.
 
-2. **Modify the Service Layer**: 
-   - Update the service method `getCustomerInfo_Lines` to fetch or calculate the location violation details.
-   - Populate the new `locationViolationDetails` field with the relevant information (e.g., `caseId`, `violationType`, `violationDate`, `violationDescription`, and `status`).
-
-3. **Update the Response DTO**:
-   - Add the new `locationViolationDetails` object to your response DTO so that it can be serialized into the response JSON.
-
-4. **Frontend Changes**: 
-   - Ensure the frontend is updated to handle the new `locationViolationDetails` object.
-   - Display the `violationType`, `violationDate`, and `violationDescription` as part of the UI where the banner or violation details are shown.
-
-### Example Code for Backend Implementation
-
-Here’s a rough idea of what the updated method in your controller might look like:
-
-```java
-@PostMapping(value = "/getCustomerLinesInfo")
-public Mono<Customer> getCustomerLinesInfo(@Valid @RequestBody GetCustomerInfoRequest request) {
-    return sessionBean.getSessionData(AccountLandingConstants.MTN_ACCT)
-        .onErrorReturn(new HashMap<>())
-        .defaultIfEmpty(new HashMap<>())
-        .flatMap(sessionData -> {
-            Logger.info(AccountLandingConstants.FETCHING_REDIS_DATA);
-
-            if(sessionData.containsKey(SessionConstants.ACCOUNT_NUMBER_KEY) 
-                && sessionData.get(SessionConstants.ACCOUNT_NUMBER_KEY) != null){
-                request.setAccountNumber((String) sessionData.get(SessionConstants.ACCOUNT_NUMBER_KEY));
-            }
-
-            if(StringUtilities.isEmptyOrNull((String) sessionData.get(SessionConstants.ACCOUNT_NUMBER_KEY))) {
-                return Mono.error(new SOEValidationException("customerId", request.getAccountNumber(), "Invalid customerId", "701"));
-            }
-
-            if (ETRComponent.LINES.getComponent().equalsIgnoreCase(request.getComponent())) {
-                return service.getCustomerInfo_Lines(request)
-                    .map(customer -> {
-                        // Add location violation details to the customer object
-                        LocationViolationDetails violationDetails = new LocationViolationDetails();
-                        violationDetails.setCaseId("12345ABC");
-                        violationDetails.setViolationType("Location Violation");
-                        violationDetails.setViolationDate("2024-08-19");
-                        violationDetails.setViolationDescription("Speed cap applied due to location violation.");
-                        violationDetails.setStatus("Active");
-                        
-                        customer.setLocationViolationDetails(violationDetails);
-                        return customer;
-                    });
-            } else {
-                return Mono.error(new SOEValidationException("component", request.getComponent(), "Invalid component", "701"));
-            }
-        });
-}
-```
-
-### Summary
-- **Backend Update**: Add new fields for `locationViolationDetails` in your response object and populate it in the controller or service layer.
-- **Frontend Update**: Ensure that the frontend can properly display the new fields like `caseId`, `violationType`, etc.
-
-This approach should meet your requirement for displaying location violation details in the response and showing the banner on the frontend accordingly.
+This implementation will make sure that the `fwaLocationViolationlines` data is dynamically added based on the customer information and any specific business logic you have for determining the status.
