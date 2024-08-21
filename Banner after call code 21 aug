@@ -1,0 +1,141 @@
+To implement the logic based on the new requirements, follow these steps:
+
+### 1. Analyze the Input Data:
+- **CJCM network outage JSON response**: Contains case data with details about each outage, including `mtnimpacted`, `caseStatus`, and other attributes.
+- **CXP JSON response**: Provides MTN details, which you need to compare with the `mtnimpacted` from the CJCM response.
+- **SOE JSON response**: The final response where you will include either a generic message or specific case statuses like "Pending-LVSpeedcap" or "LVSpeedCapApplied."
+
+### 2. Define the Conditions:
+1. **If the number of cases in CJCM response > 1**:
+   - Append a generic message in the `fwaLocationViolationLines` array of the SOE JSON response.
+
+2. **If the number of cases = 1**:
+   - Compare the MTN from CXP response with `mtnimpacted` from CJCM response.
+   - If they match, append the specific case status ("Pending-LVSpeedcap" or "LVSpeedCapApplied") in the `fwaLocationViolationLines` array of the SOE JSON response.
+
+### 3. Modify `getCustomerInfo_Lines` Service Method:
+You’ll need to modify the `getCustomerInfo_Lines` method to include this logic.
+
+Here is a code example:
+
+```java
+public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
+    // ... Existing code ...
+
+    return Mono.zip(customerInfo, featureFlagMono).flatMap(tuple -> {
+        CustomerProfileGraphQLAssistedResponse customer = tuple.getT1();
+
+        // Assume cjcmResponse is retrieved from an external service
+        CJCMResponse cjcmResponse = getCJCMResponse(request);
+
+        int caseCount = cjcmResponse.getServiceBody().getServiceResponse().getCases().size();
+
+        if (caseCount > 1) {
+            // Add a generic message in the SOE JSON response
+            customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
+                billAccount.getMtns().forEach(mtn -> {
+                    SOEResponse soeResponse = new SOEResponse();
+                    soeResponse.addFwaLocationViolationLine(mtn.getMin(), "GenericLVSpeedCap");
+                    // Add this to your final JSON response
+                });
+            });
+        } else if (caseCount == 1) {
+            CJCMCase caseData = cjcmResponse.getServiceBody().getServiceResponse().getCases().get(0);
+            String impactedMtn = caseData.getMtnimpacted();
+
+            customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
+                billAccount.getMtns().forEach(mtn -> {
+                    if (mtn.getMin().equals(impactedMtn)) {
+                        SOEResponse soeResponse = new SOEResponse();
+                        soeResponse.addFwaLocationViolationLine(mtn.getMin(), caseData.getCaseStatus());
+                        // Add this to your final JSON response
+                    }
+                });
+            });
+        }
+
+        // ... Existing code to process customerInfo ...
+
+        return Mono.just(customer.getData().getCustomerProfile());
+    });
+}
+```
+
+### 4. Integration with Controller:
+Make sure that `/getCustomerLinesInfo` controller method properly calls this updated service method and handles the response correctly.
+
+### 5. Testing:
+- **Case 1**: Test with more than one case in CJCM response and ensure the generic message is shown.
+- **Case 2**: Test with exactly one case and confirm the correct MTN and status are displayed.
+- **Case 3**: Ensure no changes are needed for scenarios not mentioned in the requirements.
+
+This implementation should address the requirements you've laid out. Let me know if you need any further clarification or help with specific parts of the code.
+
+
+///
+controller
+Below is the updated controller for handling the `/getCustomerLinesInfo` endpoint, incorporating the logic you've described. I'll also point out the key areas where further attention is needed to ensure correctness.
+
+### Updated `/getCustomerLinesInfo` Controller
+
+```java
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class CustomerInfoController {
+
+    private final CustomerInfoService service;
+    private final SessionBean sessionBean;
+
+    public CustomerInfoController(CustomerInfoService service, SessionBean sessionBean) {
+        this.service = service;
+        this.sessionBean = sessionBean;
+    }
+
+    @PostMapping(value = "/getCustomerLinesInfo")
+    public Mono<Customer> getCustomerLinesInfo(@Valid @RequestBody GetCustomerInfoRequest request) {
+        return sessionBean.getSessionData(AccountLandingConstants.MTN_ACCT)
+                .defaultIfEmpty(new HashMap<>())
+                .flatMap(sessionData -> {
+
+                    // Fetching and validating session data
+                    if (sessionData.containsKey(SessionConstants.ACCOUNT_NUMBER_KEY) && sessionData.get(SessionConstants.ACCOUNT_NUMBER_KEY) != null) {
+                        request.setAccountNumber((String) sessionData.get(SessionConstants.ACCOUNT_NUMBER_KEY));
+                    } else {
+                        return Mono.error(new SOEValidationException("customerId", request.getAccountNumber(), "Invalid customerId", "701"));
+                    }
+
+                    if (ETRComponent.LINES.getComponent().equalsIgnoreCase(request.getComponent())) {
+                        // Calling the service method which contains our new logic
+                        return service.getCustomerInfo_Lines(request);
+                    } else {
+                        return Mono.error(new SOEValidationException("component", request.getComponent(), "Invalid component", "701"));
+                    }
+                });
+    }
+}
+```
+
+### Key Focus Areas:
+
+1. **Session Data Handling**:
+    - Ensure that session data is being retrieved and validated correctly.
+    - The account number is fetched from session data and set in the `GetCustomerInfoRequest` object. Verify that this step is always successful and that the account number is correctly passed to the service method.
+
+2. **Component Validation**:
+    - The component check ensures that only valid requests with `ETRComponent.LINES` are processed. If you need to handle other components differently, add appropriate logic here.
+
+3. **Error Handling**:
+    - The controller uses custom exceptions like `SOEValidationException`. Ensure that these exceptions are well-defined and provide clear error messages. Additionally, verify that error handling mechanisms are in place to properly respond to invalid requests.
+
+4. **Integration with Service Layer**:
+    - The most crucial part is the interaction with the `getCustomerInfo_Lines` service method. This service method contains the new logic for handling multiple and single cases from the CJCM response. Ensure that the service method is properly called and that the response is correctly propagated back to the client.
+
+### Additional Notes:
+
+- **Testing**: Thorough testing is necessary for both session data retrieval and the logic in the service method. Pay special attention to edge cases, such as when no cases are present, or when the session data is incomplete.
+  
+- **Logging**: Consider adding logging in strategic places to help with debugging and to track the flow of data through the controller and service methods.
+
+This updated controller should meet the requirements, and the highlighted areas are where you should focus to ensure the logic is correctly implemented and integrated. Let me know if you need further assistance!
