@@ -1,7 +1,50 @@
-import onevz.soe.wsclient.bpm.model.response.BPMGetCasesResponse;
-import onevz.soe.wsclient.bpm.model.ServiceHeader;
-import onevz.soe.wsclient.bpm.model.ServiceBody;
-import onevz.soe.wsclient.bpm.BPMServices;
-import onevz.soe.wsclient.bpm.model.request.BPMServiceRequest;
-import onevz.soe.accountlanding.model.bpm.getcases.CaseCreationBPMRequest;
-import onevz.soe.accountlanding.model.response.GetCustomerInfoResponse;
+// Invoke BPM Get Cases API
+            return bpmServiceImpl.getCases(bpmRequest).flatMap(bpmResponse -> {
+                if (bpmResponse != null && bpmResponse.getServiceBody() != null
+                        && bpmResponse.getServiceBody().getCases() != null) {
+                    bpmResponse.getServiceBody().getCases().forEach(caseItem -> {
+                        FWALocationViolationLines violationLine = new FWALocationViolationLines();
+                        violationLine.setMtn(caseItem.getMtnImpacted());
+                        violationLine.setCaseStatus(caseItem.getCaseStatus());
+                        fwaLocationViolationLines.add(violationLine);
+                    });
+                }
+
+                // Process customer info to extract relevant details
+                Map<String, String> mtnHashMap = new HashMap<>();
+                List<String> secondNumberMtns = new ArrayList<>();
+
+                if (customer != null && customer.getData() != null && customer.getData().getCustomerProfile() != null) {
+                    customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
+                        if (billAccount.getMtns() != null) {
+                            billAccount.getMtns().forEach(mtn -> {
+                                if (mtn.getMtn() != null && mtn.getMtnStatus() != null && mtn.getMtnStatus().getIsActive()) {
+                                    if (mtn.getNetworkBandwidthType() != null && networkBandwidthType.contains(mtn.getNetworkBandwidthType())) {
+                                        mtnHashMap.put(mtn.getMtn(), mtn.getMtnHashCode());
+                                        if (mtn.getPricePlanInfo() != null && mtn.getPricePlanInfo().getPlanAttributes() != null) {
+                                            boolean hasSecondNumPlan = mtn.getPricePlanInfo().getPlanAttributes().getHasSecondNumPlan();
+                                            if (hasSecondNumPlan) {
+                                                secondNumberMtns.add(mtn.getMtn());
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // Handle feature flag condition
+                if (isFeatureEnabled) {
+                    Map<String, String> sessionData = createSessionData(mtnHashMap);
+                    return sessionHelper.upsertDataInRedisMono(sessionData).flatMap(data -> {
+                        Logger.info("Upserting Mtn hash map into Redis", data);
+                        return Mono.just(customer.getData().getCustomerProfile());
+                    });
+                } else {
+                    return Mono.just(customer.getData().getCustomerProfile());
+                }
+            });
+        });
+    }
+}
