@@ -1,0 +1,7 @@
+        GetCasesServiceRequest getCasesServiceRequest = (GetCasesServiceRequest) getCasesRequest.getServiceBody().getServiceRequest();
+        getCasesServiceRequest.setCaseSearch(new CaseSearch());
+        getCasesServiceRequest.getCaseSearch().setAccountNumber(accountNumber);
+        getCasesServiceRequest.getCaseSearch().setCaseType(new ArrayList<>());
+        getCasesServiceRequest.getCaseSearch().getCaseType().add(caseType);
+
+        return getCasesRequest;
