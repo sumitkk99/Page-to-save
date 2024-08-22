@@ -1,8 +1,8 @@
-// Invoke BPM Get Cases API
-            return bpmServiceImpl.getCases(bpmRequest).flatMap(bpmResponse -> {
-                if (bpmResponse != null && bpmResponse.getServiceBody() != null
-                        && bpmResponse.getServiceBody().getCases() != null) {
-                    bpmResponse.getServiceBody().getCases().forEach(caseItem -> {
+ // Invoke BPM Get Cases API
+            return bpmServiceImpl.getCases(bpmRequest).flatMap(bpmGetCasesResponse -> { // Use correct response type
+                if (bpmGetCasesResponse != null && bpmGetCasesResponse.getServiceBody() != null
+                        && bpmGetCasesResponse.getServiceBody().getCases() != null) {
+                    bpmGetCasesResponse.getServiceBody().getCases().forEach(caseItem -> {
                         FWALocationViolationLines violationLine = new FWALocationViolationLines();
                         violationLine.setMtn(caseItem.getMtnImpacted());
                         violationLine.setCaseStatus(caseItem.getCaseStatus());
