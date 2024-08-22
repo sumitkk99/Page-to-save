@@ -1,8 +1,7 @@
-// Prepare BPM request
-            ServiceHeader serviceHeader = new ServiceHeader();
-            serviceHeader.setClientId("VZW-MFA");
-            serviceHeader.setServiceName("GetCases");
-
-            CaseCreationBPMRequest bpmRequest = new CaseCreationBPMRequest();
-            bpmRequest.setServiceHeader(serviceHeader);
-            bpmRequest.setServiceBody(new ServiceBody());
+import onevz.soe.wsclient.bpm.model.response.BPMGetCasesResponse;
+import onevz.soe.wsclient.bpm.model.ServiceHeader;
+import onevz.soe.wsclient.bpm.model.ServiceBody;
+import onevz.soe.wsclient.bpm.BPMServices;
+import onevz.soe.wsclient.bpm.model.request.BPMServiceRequest;
+import onevz.soe.accountlanding.model.bpm.getcases.CaseCreationBPMRequest;
+import onevz.soe.accountlanding.model.response.GetCustomerInfoResponse;
