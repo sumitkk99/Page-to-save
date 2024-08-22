@@ -1,21 +1,8 @@
-public static BPMServiceRequest createBPMServiceRequest(String accountNumber) {
-        BPMServiceRequest request = new BPMServiceRequest();
+// Prepare BPM request
+            ServiceHeader serviceHeader = new ServiceHeader();
+            serviceHeader.setClientId("VZW-MFA");
+            serviceHeader.setServiceName("GetCases");
 
-        BPMServiceRequest.ServiceHeader serviceHeader = new BPMServiceRequest.ServiceHeader();
-        serviceHeader.setClientId("ChannelId");
-        serviceHeader.setServiceName("GetCasesServiceName");
-
-        BPMServiceRequest.ServiceBody serviceBody = new BPMServiceRequest.ServiceBody();
-        BPMServiceRequest.GetCasesServiceRequest getCasesServiceRequest = new BPMServiceRequest.GetCasesServiceRequest();
-        BPMServiceRequest.CaseSearch caseSearch = new BPMServiceRequest.CaseSearch();
-
-        caseSearch.setAccountNumber(accountNumber);
-        caseSearch.setCaseType(Collections.singletonList("CaseType"));
-
-        getCasesServiceRequest.setCaseSearch(caseSearch);
-        serviceBody.setServiceRequest(getCasesServiceRequest);
-
-        request.setServiceHeader(serviceHeader);
-        request.setServiceBody(serviceBody);
-
-        return request;
+            CaseCreationBPMRequest bpmRequest = new CaseCreationBPMRequest();
+            bpmRequest.setServiceHeader(serviceHeader);
+            bpmRequest.setServiceBody(new ServiceBody());
