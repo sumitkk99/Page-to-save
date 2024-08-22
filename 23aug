@@ -1,3 +1,13 @@
+populateFWALocationViolationLines(fwaLocationViolationLines, bpmCasesResponse, customerProfile);
+customerProfile.getData().getCustomerProfile().setFwaLocationViolationLines(fwaLocationViolationLines);
 
 
-BPMServiceRequest request = BPMRequestHelper.createBPMServiceRequest(channelId, "GetCasesServiceName", request.getAccountNumber(), "CaseType");
+// New Logic: Method to populate FWALocationViolationLines list
+    private void populateFWALocationViolationLines(List<FWALocationViolationLines> lines, GetCasesResponse bpmCasesResponse, CustomerProfileGraphQLAssistedResponse customerProfile) {
+        for (Case caseItem : bpmCasesResponse.getServiceBody().getServiceResponse().getCases()) {
+            FWALocationViolationLines line = new FWALocationViolationLines();
+            line.setMtn(caseItem.getMtnimpacted());
+            line.setCaseStatus(caseItem.getCaseStatus());
+            lines.add(line);
+        }
+    }
