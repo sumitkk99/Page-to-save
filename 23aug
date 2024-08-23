@@ -1,43 +1,63 @@
-package onevz.soe.accountlanding.model.bpm;
+package onevz.soe.accountlanding.service;
 
-import lombok.Data;
+import onevz.soe.accountlanding.helper.BPMHelper1;
+import onevz.soe.accountlanding.model.FwaLocationViolationLine;
+import onevz.soe.accountlanding.model.SoeResponse;
+import onevz.soe.wsclient.bpm.model.response.GetCasesResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 
-@Data
-public class LocationViolationCaseSearch {
+@Service
+public class LocationViolationService {
 
-    private String accountNumber;
-    private String orderNumber;
-    private String locationCode;
-    private String caseStatus;
-    private List<String> caseType;
-    private String intent;
-    private String showCaseHierarchyFlag;
-}
+    @Autowired
+    private BPMHelper1 bpmHelper1;
 
-//
+    public Mono<SoeResponse> getLocationViolationInfo(String accountNumber) {
+        return bpmHelper1.getLocationViolationStatus("VZW-MFA", accountNumber)
+                .flatMap(response -> {
+                    List<FwaLocationViolationLine> violationLines = processLocationViolationResponse(response);
 
+                    SoeResponse soeResponse = new SoeResponse();
+                    soeResponse.setSecondNumPlanExists(false);
+                    
+                    if (!violationLines.isEmpty()) {
+                        soeResponse.setFwaLocationViolationInfo(violationLines);
+                        soeResponse.setGenericLVBanner(violationLines.size() > 1);
+                    }
 
-package onevz.soe.accountlanding.model.bpm;
+                    return Mono.just(soeResponse);
+                });
+    }
 
-import lombok.Data;
+    private List<FwaLocationViolationLine> processLocationViolationResponse(GetCasesResponse response) {
+        List<FwaLocationViolationLine> violationLines = new ArrayList<>();
 
-@Data
-public class LocationViolationServiceRequestBody {
+        if (response != null && response.getServiceBody() != null) {
+            List<CaseDetail> cases = response.getServiceBody().getServiceResponse().getCases();
 
-    private LocationViolationCaseSearch serviceRequest;
-}
+            if (cases != null) {
+                for (CaseDetail caseDetail : cases) {
+                    FwaLocationViolationLine violationLine = new FwaLocationViolationLine();
+                    violationLine.setMtn(caseDetail.getMtnImpacted());
 
-//
+                    if (cases.size() > 1) {
+                        violationLine.setCaseStatus("GenericLVSpeedCap");
+                    } else if ("Pending-LVSpeedcap".equalsIgnoreCase(caseDetail.getCaseStatus())) {
+                        violationLine.setCaseStatus("Pending-LVSpeedcap");
+                    } else {
+                        violationLine.setCaseStatus("LVSpeedCapApplied");
+                    }
 
-package onevz.soe.accountlanding.model.bpm;
+                    violationLines.add(violationLine);
+                }
+            }
+        }
 
-import lombok.Data;
-import onevz.soe.wsclient.bpm.model.request.BPMServiceRequest;
-
-@Data
-public class LocationViolationServiceRequest extends BPMServiceRequest {
-
-    private LocationViolationServiceRequestBody serviceBody;
+        return violationLines;
+    }
 }
