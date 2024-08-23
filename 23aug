@@ -1,16 +1,43 @@
-   public static LocationViolationServiceRequest createLocationViolationRequest(String accountNumber, String mtn) {
-        LocationViolationCaseSearch caseSearch = new LocationViolationCaseSearch();
-        caseSearch.setAccountNumber(accountNumber);
-        caseSearch.setCaseStatus("ALL");
-        caseSearch.setCaseType(Collections.singletonList("NetworkOutage"));
-        caseSearch.setIntent("Location Violation");
-        caseSearch.setShowCaseHierarchyFlag("true");
+package onevz.soe.accountlanding.model.bpm;
 
-        LocationViolationServiceRequestBody requestBody = new LocationViolationServiceRequestBody();
-        requestBody.setServiceRequest(caseSearch);
+import lombok.Data;
 
-        LocationViolationServiceRequest request = new LocationViolationServiceRequest();
-        request.setServiceBody(requestBody);
+import java.util.List;
 
-        return request;
-    }
+@Data
+public class LocationViolationCaseSearch {
+
+    private String accountNumber;
+    private String orderNumber;
+    private String locationCode;
+    private String caseStatus;
+    private List<String> caseType;
+    private String intent;
+    private String showCaseHierarchyFlag;
+}
+
+//
+
+
+package onevz.soe.accountlanding.model.bpm;
+
+import lombok.Data;
+
+@Data
+public class LocationViolationServiceRequestBody {
+
+    private LocationViolationCaseSearch serviceRequest;
+}
+
+//
+
+package onevz.soe.accountlanding.model.bpm;
+
+import lombok.Data;
+import onevz.soe.wsclient.bpm.model.request.BPMServiceRequest;
+
+@Data
+public class LocationViolationServiceRequest extends BPMServiceRequest {
+
+    private LocationViolationServiceRequestBody serviceBody;
+}
