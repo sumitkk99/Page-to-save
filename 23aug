@@ -1,50 +1,58 @@
- // Invoke BPM Get Cases API
-            return bpmServiceImpl.getCases(bpmRequest).flatMap(bpmGetCasesResponse -> { // Use correct response type
-                if (bpmGetCasesResponse != null && bpmGetCasesResponse.getServiceBody() != null
-                        && bpmGetCasesResponse.getServiceBody().getCases() != null) {
-                    bpmGetCasesResponse.getServiceBody().getCases().forEach(caseItem -> {
-                        FWALocationViolationLines violationLine = new FWALocationViolationLines();
-                        violationLine.setMtn(caseItem.getMtnImpacted());
-                        violationLine.setCaseStatus(caseItem.getCaseStatus());
-                        fwaLocationViolationLines.add(violationLine);
-                    });
-                }
+public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
+    // Construct the GraphQL request
+    CustomerRequestType customerRequestType = new CustomerRequestType();
+    customerRequestType.setCustomerId(request.getAccountNumber());
+    customerRequestType.setRetrieveDeactivePriceplans(true);
 
-                // Process customer info to extract relevant details
-                Map<String, String> mtnHashMap = new HashMap<>();
-                List<String> secondNumberMtns = new ArrayList<>();
+    // Fetch customer info and feature flags
+    Mono<CustomerProfileGraphQLAssistedResponse> customerInfo = cxpCustomerService.retrieveCustomerInfo_lines(customerRequestType);
+    Mono<Boolean> featureFlagMono = featureFlag.isFeatureEnabled(
+        FeatureFlagConstants.APPLICATION_NAME_FWA_DEFAULT,
+        FeatureFlagConstants.CONFIG_PROFILE_FWA_ADDONS,
+        FeatureFlagConstants.FLAG_NAME_FWA_WHWSPO_MODE_FFAG, 
+        true
+    );
 
-                if (customer != null && customer.getData() != null && customer.getData().getCustomerProfile() != null) {
-                    customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
-                        if (billAccount.getMtns() != null) {
-                            billAccount.getMtns().forEach(mtn -> {
-                                if (mtn.getMtn() != null && mtn.getMtnStatus() != null && mtn.getMtnStatus().getIsActive()) {
-                                    if (mtn.getNetworkBandwidthType() != null && networkBandwidthType.contains(mtn.getNetworkBandwidthType())) {
-                                        mtnHashMap.put(mtn.getMtn(), mtn.getMtnHashCode());
-                                        if (mtn.getPricePlanInfo() != null && mtn.getPricePlanInfo().getPlanAttributes() != null) {
-                                            boolean hasSecondNumPlan = mtn.getPricePlanInfo().getPlanAttributes().getHasSecondNumPlan();
-                                            if (hasSecondNumPlan) {
-                                                secondNumberMtns.add(mtn.getMtn());
-                                            }
-                                        }
-                                    }
-                                }
-                            });
+    // Fetch CJCM Network Outage Data
+    Mono<GetCasesResponse> cjcmResponseMono = bpmServiceImpl.getCases(request.getAccountNumber());
+
+    // Combine the fetched data
+    return Mono.zip(customerInfo, featureFlagMono, cjcmResponseMono)
+        .flatMap(tuple -> {
+            CustomerProfileGraphQLAssistedResponse customer = tuple.getT1();
+            Boolean featureFlag = tuple.getT2();
+            GetCasesResponse cjcmResponse = tuple.getT3();
+
+            // Process CJCM network outage cases
+            List<CJCMCase> cases = cjcmResponse.getServiceBody().getServiceResponse().getCases();
+            Map<String, String> mtnCaseStatusMap = new HashMap<>();
+
+            if (cases.size() > 1) {
+                // Generic message case
+                cases.forEach(cjcmCase -> mtnCaseStatusMap.put(cjcmCase.getMtnImpacted(), "GenericLVSpeedCap"));
+            } else if (cases.size() == 1) {
+                // Specific case: Compare MTNs and determine status
+                CJCMCase cjcmCase = cases.get(0);
+                String impactedMtn = cjcmCase.getMtnImpacted();
+                
+                customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
+                    billAccount.getMtns().forEach(mtn -> {
+                        if (mtn.getMin().equals(impactedMtn)) {
+                            mtnCaseStatusMap.put(impactedMtn, cjcmCase.getCaseStatus());
                         }
                     });
-                }
+                });
+            }
 
-                // Handle feature flag condition
-                if (isFeatureEnabled) {
-                    Map<String, String> sessionData = createSessionData(mtnHashMap);
-                    return sessionHelper.upsertDataInRedisMono(sessionData).flatMap(data -> {
-                        Logger.info("Upserting Mtn hash map into Redis", data);
-                        return Mono.just(customer.getData().getCustomerProfile());
-                    });
-                } else {
-                    return Mono.just(customer.getData().getCustomerProfile());
-                }
+            // Add the banner information to the response
+            List<FWALocationViolationLine> fwaLocationViolationLines = new ArrayList<>();
+            mtnCaseStatusMap.forEach((mtn, caseStatus) -> {
+                fwaLocationViolationLines.add(new FWALocationViolationLine(mtn, caseStatus));
             });
+
+            // Append to SOE JSON response
+            customer.setFwaLocationViolationLines(fwaLocationViolationLines);
+
+            return Mono.just(customer.getData().getCustomerProfile());
         });
-    }
 }
