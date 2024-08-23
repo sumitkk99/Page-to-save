@@ -1,58 +1,16 @@
-public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
-    // Construct the GraphQL request
-    CustomerRequestType customerRequestType = new CustomerRequestType();
-    customerRequestType.setCustomerId(request.getAccountNumber());
-    customerRequestType.setRetrieveDeactivePriceplans(true);
+   public static LocationViolationServiceRequest createLocationViolationRequest(String accountNumber, String mtn) {
+        LocationViolationCaseSearch caseSearch = new LocationViolationCaseSearch();
+        caseSearch.setAccountNumber(accountNumber);
+        caseSearch.setCaseStatus("ALL");
+        caseSearch.setCaseType(Collections.singletonList("NetworkOutage"));
+        caseSearch.setIntent("Location Violation");
+        caseSearch.setShowCaseHierarchyFlag("true");
 
-    // Fetch customer info and feature flags
-    Mono<CustomerProfileGraphQLAssistedResponse> customerInfo = cxpCustomerService.retrieveCustomerInfo_lines(customerRequestType);
-    Mono<Boolean> featureFlagMono = featureFlag.isFeatureEnabled(
-        FeatureFlagConstants.APPLICATION_NAME_FWA_DEFAULT,
-        FeatureFlagConstants.CONFIG_PROFILE_FWA_ADDONS,
-        FeatureFlagConstants.FLAG_NAME_FWA_WHWSPO_MODE_FFAG, 
-        true
-    );
+        LocationViolationServiceRequestBody requestBody = new LocationViolationServiceRequestBody();
+        requestBody.setServiceRequest(caseSearch);
 
-    // Fetch CJCM Network Outage Data
-    Mono<GetCasesResponse> cjcmResponseMono = bpmServiceImpl.getCases(request.getAccountNumber());
+        LocationViolationServiceRequest request = new LocationViolationServiceRequest();
+        request.setServiceBody(requestBody);
 
-    // Combine the fetched data
-    return Mono.zip(customerInfo, featureFlagMono, cjcmResponseMono)
-        .flatMap(tuple -> {
-            CustomerProfileGraphQLAssistedResponse customer = tuple.getT1();
-            Boolean featureFlag = tuple.getT2();
-            GetCasesResponse cjcmResponse = tuple.getT3();
-
-            // Process CJCM network outage cases
-            List<CJCMCase> cases = cjcmResponse.getServiceBody().getServiceResponse().getCases();
-            Map<String, String> mtnCaseStatusMap = new HashMap<>();
-
-            if (cases.size() > 1) {
-                // Generic message case
-                cases.forEach(cjcmCase -> mtnCaseStatusMap.put(cjcmCase.getMtnImpacted(), "GenericLVSpeedCap"));
-            } else if (cases.size() == 1) {
-                // Specific case: Compare MTNs and determine status
-                CJCMCase cjcmCase = cases.get(0);
-                String impactedMtn = cjcmCase.getMtnImpacted();
-                
-                customer.getData().getCustomerProfile().getBillAccounts().forEach(billAccount -> {
-                    billAccount.getMtns().forEach(mtn -> {
-                        if (mtn.getMin().equals(impactedMtn)) {
-                            mtnCaseStatusMap.put(impactedMtn, cjcmCase.getCaseStatus());
-                        }
-                    });
-                });
-            }
-
-            // Add the banner information to the response
-            List<FWALocationViolationLine> fwaLocationViolationLines = new ArrayList<>();
-            mtnCaseStatusMap.forEach((mtn, caseStatus) -> {
-                fwaLocationViolationLines.add(new FWALocationViolationLine(mtn, caseStatus));
-            });
-
-            // Append to SOE JSON response
-            customer.setFwaLocationViolationLines(fwaLocationViolationLines);
-
-            return Mono.just(customer.getData().getCustomerProfile());
-        });
-}
+        return request;
+    }
