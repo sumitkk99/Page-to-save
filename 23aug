@@ -1,6 +1,3 @@
-To address the scenario where each MTN (Mobile Telephone Number) can vary and different logic may be required for each one, I'll update the code to handle multiple MTNs with distinct logic for each. Here's the revised code:
-
-```java
 package onevz.soe.accountlanding.service;
 
 import onevz.soe.accountlanding.helper.BPMHelper1;
@@ -13,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,25 +20,49 @@ public class GetCustomerInfoService {
     @Autowired
     private BPMHelper1 bpmHelper1;
 
+    // The main method where you'll integrate the new logic
     public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
-        // Assuming this service is integrated with cxpCustomerService and sessionHelper, as in the previous code.
-        return cxpCustomerService.retrieveCustomerInfo_lines(customerRequestType)
-                .flatMap(customer -> bpmHelper1.getLocationViolationStatus(AccountLandingConstants.CHANNEL_ID, request.getAccountNumber())
-                        .flatMap(getCasesResponse -> {
-                            List<FWALocationViolationInfo> violationInfos = customer.getData().getCustomerProfile().getBillAccounts().stream()
-                                    .flatMap(billAccount -> billAccount.getMtns().stream())
-                                    .map(mtn -> {
-                                        FWALocationViolationInfo violationInfo = processMtn(mtn.getMtn(), getCasesResponse);
-                                        return violationInfo != null ? violationInfo : null;
-                                    })
-                                    .collect(Collectors.toList());
 
-                            customer.getData().getCustomerProfile().setFwaLocationViolationInfos(violationInfos);
-                            return Mono.just(customer.getData().getCustomerProfile());
-                        })
-                );
+        // Start of your existing logic
+        CustomerRequestType customerRequestType = new CustomerRequestType();
+        if (request != null && request.getAccountNumber() != null && !request.getAccountNumber().isEmpty()) {
+            customerRequestType.setCustomerId(request.getAccountNumber());
+            customerRequestType.setRetrieveDeactivePriceplans(true);
+        }
+
+        Mono<CustomerProfileGraphQLAssistedResponse> customerInfo = cxpCustomerService.retrieveCustomerInfo_lines(customerRequestType);
+        Mono<Boolean> featureFlagMono = featureFlag.isFeatureEnabled(FeatureFlagConstants.APPLICATION_NAME_FWA_DEFAULT,
+                FeatureFlagConstants.CONFIG_PROFILE_FWA_ADDONS, FeatureFlagConstants.FLAG_NAME_FWA_WHWSPO_MODE_FFAG, true);
+
+        return Mono.zip(customerInfo, featureFlagMono)
+                .flatMap(tuple -> {
+                    CustomerProfileGraphQLAssistedResponse customer = tuple.getT1();
+                    // Add your customer profile processing logic here
+
+                    // After processing customer data, now integrate BPMHelper1 for Location Violation Cases
+                    return bpmHelper1.getLocationViolationStatus(AccountLandingConstants.CHANNEL_ID, request.getAccountNumber())
+                            .flatMap(getCasesResponse -> {
+                                // Initialize an empty list to store violation information for each MTN
+                                List<FWALocationViolationInfo> violationInfos = new ArrayList<>();
+
+                                // Process each MTN (Mobile Telephone Number) individually
+                                for (String mtn : request.getMtns()) {
+                                    FWALocationViolationInfo violationInfo = processMtn(mtn, getCasesResponse);
+                                    if (violationInfo != null) {
+                                        violationInfos.add(violationInfo);
+                                    }
+                                }
+
+                                // Set the violation information list to the customer profile
+                                Customer customerProfile = customer.getData().getCustomerProfile();
+                                customerProfile.setFwaLocationViolationInfos(violationInfos);
+
+                                return Mono.just(customerProfile);
+                            });
+                });
     }
 
+    // Method to process each MTN and get the violation status
     private FWALocationViolationInfo processMtn(String mtn, GetCasesResponse getCasesResponse) {
         List<FWALocationViolationLines> violationLines = processLocationViolationCases(mtn, getCasesResponse);
 
@@ -63,32 +85,22 @@ public class GetCustomerInfoService {
         return violationInfo;
     }
 
+    // Method to process location violation cases based on the response from BPMHelper1
     private List<FWALocationViolationLines> processLocationViolationCases(String mtn, GetCasesResponse getCasesResponse) {
-        // Logic to process and filter cases specifically for the given MTN.
-        // Replace the mock data with actual logic based on getCasesResponse.
         return getCasesResponse.getCases().stream()
-                .filter(case -> case.getMtn().equals(mtn))
-                .map(case -> new FWALocationViolationLines(case.getMtn(), determineCaseStatus(case)))
+                .filter(locationViolationCase -> locationViolationCase.getMtn().equals(mtn))
+                .map(locationViolationCase -> new FWALocationViolationLines(locationViolationCase.getMtn(), determineCaseStatus(locationViolationCase)))
                 .collect(Collectors.toList());
     }
 
-    private String determineCaseStatus(LocationViolationCaseSearch case) {
-        // Implement the logic to determine case status based on specific conditions.
-        // For example:
-        if (case.isPending()) {
+    // Helper method to determine the case status for each violation
+    private String determineCaseStatus(LocationViolationCaseSearch locationViolationCase) {
+        if (locationViolationCase.isPending()) {
             return "Pending-LVSpeedcap";
-        } else if (case.isApplied()) {
+        } else if (locationViolationCase.isApplied()) {
             return "LVSpeedCapApplied";
         } else {
             return "GenericLVSpeedCap";
         }
     }
 }
-```
-
-### Key Updates:
-1. **Handling Multiple MTNs:** The code iterates through each MTN, processing them individually and applying the relevant logic based on each MTN's specific scenario.
-2. **`processMtn` Method:** This method processes each MTN separately, applying logic to determine whether a generic banner is required or if specific status information should be attached.
-3. **`processLocationViolationCases` Method:** This method filters and processes the cases for each MTN, mapping them to `FWALocationViolationLines`.
-
-This approach ensures that the logic is applied per MTN, accommodating the different scenarios that may occur for each MTN.
