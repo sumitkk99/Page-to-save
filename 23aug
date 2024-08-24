@@ -1,63 +1,134 @@
+Certainly! Below is the full implementation of the service method in your `LocationViolationService` class that integrates the logic to append the location violation response (with the `fwaLocationViolationLines` list) into the overall SOE response.
+
+### `LocationViolationService.java`
+
+```java
 package onevz.soe.accountlanding.service;
 
-import onevz.soe.accountlanding.helper.BPMHelper1;
-import onevz.soe.accountlanding.model.FwaLocationViolationLine;
-import onevz.soe.accountlanding.model.SoeResponse;
-import onevz.soe.wsclient.bpm.model.response.GetCasesResponse;
+import onevz.soe.accountlanding.helper.LocationViolationHelper;
+import onevz.soe.accountlanding.model.bpm.GetCasesResponse;
+import onevz.soe.accountlanding.model.bpm.LocationViolationServiceResponse;
+import onevz.soe.accountlanding.model.soe.FWALocationViolationInfo;
+import onevz.soe.accountlanding.model.soe.FWALocationViolationLines;
+import onevz.soe.accountlanding.model.soe.Customer;
+import onevz.soe.accountlanding.model.soe.GetCustomerInfoRequest;
+import onevz.soe.wsclient.bpm.model.request.BPMServiceRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class LocationViolationService {
 
     @Autowired
-    private BPMHelper1 bpmHelper1;
+    private LocationViolationHelper locationViolationHelper;
 
-    public Mono<SoeResponse> getLocationViolationInfo(String accountNumber) {
-        return bpmHelper1.getLocationViolationStatus("VZW-MFA", accountNumber)
-                .flatMap(response -> {
-                    List<FwaLocationViolationLine> violationLines = processLocationViolationResponse(response);
+    @Autowired
+    private BPMServiceImpl bpmServiceImpl;  // Assume you have this as your service implementation for BPM calls
 
-                    SoeResponse soeResponse = new SoeResponse();
-                    soeResponse.setSecondNumPlanExists(false);
-                    
-                    if (!violationLines.isEmpty()) {
-                        soeResponse.setFwaLocationViolationInfo(violationLines);
-                        soeResponse.setGenericLVBanner(violationLines.size() > 1);
-                    }
+    public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
+        if (request != null && request.getAccountNumber() != null && !request.getAccountNumber().isEmpty()) {
+            Mono<GetCasesResponse> getCasesResponseMono = locationViolationHelper.getLocationViolationStatus("channelId", request.getAccountNumber());
 
-                    return Mono.just(soeResponse);
-                });
+            return getCasesResponseMono.flatMap(getCasesResponse -> {
+                // Logic to process the response and build the final SOE response
+                Map<String, String> mtnHashMap = new HashMap<>();
+                List<FWALocationViolationLines> fwaLocationViolationLines = processLocationViolationResponse(getCasesResponse);
+
+                FWALocationViolationInfo fwaLocationViolationInfo = new FWALocationViolationInfo();
+                fwaLocationViolationInfo.setFwaLocationViolationLines(fwaLocationViolationLines);
+
+                if (fwaLocationViolationLines.size() > 1) {
+                    fwaLocationViolationInfo.setIsGenericLVBanner(true);
+                } else if (fwaLocationViolationLines.size() == 1) {
+                    FWALocationViolationLines line = fwaLocationViolationLines.get(0);
+                    fwaLocationViolationInfo.setMtn(line.getMin());
+                    fwaLocationViolationInfo.setCaseStatus(line.getCaseStatus());
+                    fwaLocationViolationInfo.setIsGenericLVBanner(false);
+                }
+
+                // Retrieve customer information and append the fwaLocationViolationInfo
+                Mono<CustomerProfileGraphQLAssistedResponse> customerInfo = cxpCustomerService.retrieveCustomerInfo_lines(new CustomerRequestType(request.getAccountNumber(), true));
+                return Mono.zip(customerInfo, Mono.just(fwaLocationViolationInfo))
+                        .flatMap(tuple -> {
+                            Customer customer = tuple.getT1().getData().getCustomerProfile();
+                            customer.setFwaLocationViolationInfo(tuple.getT2());
+
+                            // Additional processing if needed, then return final customer response
+                            return Mono.just(customer);
+                        });
+            });
+        } else {
+            return Mono.empty();
+        }
     }
 
-    private List<FwaLocationViolationLine> processLocationViolationResponse(GetCasesResponse response) {
-        List<FwaLocationViolationLine> violationLines = new ArrayList<>();
+    private List<FWALocationViolationLines> processLocationViolationResponse(GetCasesResponse getCasesResponse) {
+        // Logic to extract and process the response to populate FWALocationViolationLines
+        // You will need to customize this according to the actual response structure
+        List<FWALocationViolationLines> lines = new ArrayList<>();
 
-        if (response != null && response.getServiceBody() != null) {
-            List<CaseDetail> cases = response.getServiceBody().getServiceResponse().getCases();
-
-            if (cases != null) {
-                for (CaseDetail caseDetail : cases) {
-                    FwaLocationViolationLine violationLine = new FwaLocationViolationLine();
-                    violationLine.setMtn(caseDetail.getMtnImpacted());
-
-                    if (cases.size() > 1) {
-                        violationLine.setCaseStatus("GenericLVSpeedCap");
-                    } else if ("Pending-LVSpeedcap".equalsIgnoreCase(caseDetail.getCaseStatus())) {
-                        violationLine.setCaseStatus("Pending-LVSpeedcap");
-                    } else {
-                        violationLine.setCaseStatus("LVSpeedCapApplied");
-                    }
-
-                    violationLines.add(violationLine);
-                }
-            }
+        // Assuming getCasesResponse contains a list of cases, and each case has a status and MTN
+        if (getCasesResponse.getCases() != null) {
+            getCasesResponse.getCases().forEach(caseInfo -> {
+                FWALocationViolationLines line = new FWALocationViolationLines();
+                line.setMin(caseInfo.getMtn());  // Assuming getMtn() returns the MTN
+                line.setCaseStatus(determineCaseStatus(caseInfo));  // Logic to determine case status based on caseInfo
+                lines.add(line);
+            });
         }
 
-        return violationLines;
+        return lines;
+    }
+
+    private String determineCaseStatus(CaseInfo caseInfo) {
+        // Logic to determine the case status based on the case information
+        if (caseInfo.isPendingLVSpeedcap()) {
+            return "Pending-LVSpeedcap";
+        } else if (caseInfo.isLVSpeedCapApplied()) {
+            return "LVSpeedCapApplied";
+        } else {
+            return "GenericLVSpeedCap";
+        }
     }
 }
+```
+
+### `CaseInfo.java`
+
+```java
+package onevz.soe.accountlanding.model.bpm;
+
+import lombok.Data;
+
+@Data
+public class CaseInfo {
+    private String mtn;
+    private boolean pendingLVSpeedcap;
+    private boolean lVSpeedCapApplied;
+
+    // Add additional fields and logic as needed to determine case status
+}
+```
+
+### Explanation:
+
+1. **Service Method (`getCustomerInfo_Lines`)**:
+   - The method checks if the `accountNumber` in the `GetCustomerInfoRequest` is valid.
+   - It retrieves location violation cases using the `LocationViolationHelper` (which calls the BPM service).
+   - It processes the response to populate `FWALocationViolationLines` and then integrates this into the `Customer` object as part of `fwaLocationViolationInfo`.
+
+2. **Process Location Violation Response (`processLocationViolationResponse`)**:
+   - This method processes the BPM response to extract `FWALocationViolationLines`.
+   - The method `determineCaseStatus` determines whether each case is `Pending-LVSpeedcap`, `LVSpeedCapApplied`, or `GenericLVSpeedCap`.
+
+3. **`CaseInfo` POJO**:
+   - This class represents individual cases with fields for MTN and status flags to assist in determining the correct case status.
+
+4. **Customer Response**:
+   - The method integrates the location violation data into the overall customer profile response and returns it.
+
+This code is designed to meet the requirement of appending the location violation response into the SOE response. Adjust the logic inside `processLocationViolationResponse` and `determineCaseStatus` to align with your actual BPM response structure and business logic.
