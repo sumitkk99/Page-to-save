@@ -1,106 +1,142 @@
-package onevz.soe.accountlanding.service;
+Apologies for the confusion. Let's maintain your existing service class as it is and just add the new logic where needed. I'll break it down so you know exactly where to add the new code.
 
-import onevz.soe.accountlanding.helper.BPMHelper1;
-import onevz.soe.accountlanding.model.bpm.GetCasesResponse;
-import onevz.soe.accountlanding.model.soe.Customer;
-import onevz.soe.accountlanding.model.soe.FWALocationViolationInfo;
-import onevz.soe.accountlanding.model.soe.FWALocationViolationLines;
-import onevz.soe.accountlanding.util.AccountLandingConstants;
+### Existing Service Class (`getCustomerInfoService`)
+
+```java
+package onevz.soe.accountlanding.service.impl;
+
+import onevz.soe.accountlanding.model.graphql.CustomerRequestType;
+import onevz.soe.accountlanding.model.response.SoeJsonResponse;
+import onevz.soe.accountlanding.service.RetrieveCustomerInfoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 @Service
-public class GetCustomerInfoService {
+public class getCustomerInfoService {
 
     @Autowired
-    private BPMHelper1 bpmHelper1;
+    private RetrieveCustomerInfoService retrieveCustomerInfoService;
 
-    // The main method where you'll integrate the new logic
-    public Mono<Customer> getCustomerInfo_Lines(GetCustomerInfoRequest request) {
-
-        // Start of your existing logic
-        CustomerRequestType customerRequestType = new CustomerRequestType();
-        if (request != null && request.getAccountNumber() != null && !request.getAccountNumber().isEmpty()) {
-            customerRequestType.setCustomerId(request.getAccountNumber());
-            customerRequestType.setRetrieveDeactivePriceplans(true);
-        }
-
-        Mono<CustomerProfileGraphQLAssistedResponse> customerInfo = cxpCustomerService.retrieveCustomerInfo_lines(customerRequestType);
-        Mono<Boolean> featureFlagMono = featureFlag.isFeatureEnabled(FeatureFlagConstants.APPLICATION_NAME_FWA_DEFAULT,
-                FeatureFlagConstants.CONFIG_PROFILE_FWA_ADDONS, FeatureFlagConstants.FLAG_NAME_FWA_WHWSPO_MODE_FFAG, true);
-
-        return Mono.zip(customerInfo, featureFlagMono)
-                .flatMap(tuple -> {
-                    CustomerProfileGraphQLAssistedResponse customer = tuple.getT1();
-                    // Add your customer profile processing logic here
-
-                    // After processing customer data, now integrate BPMHelper1 for Location Violation Cases
-                    return bpmHelper1.getLocationViolationStatus(AccountLandingConstants.CHANNEL_ID, request.getAccountNumber())
-                            .flatMap(getCasesResponse -> {
-                                // Initialize an empty list to store violation information for each MTN
-                                List<FWALocationViolationInfo> violationInfos = new ArrayList<>();
-
-                                // Process each MTN (Mobile Telephone Number) individually
-                                for (String mtn : request.getMtns()) {
-                                    FWALocationViolationInfo violationInfo = processMtn(mtn, getCasesResponse);
-                                    if (violationInfo != null) {
-                                        violationInfos.add(violationInfo);
-                                    }
-                                }
-
-                                // Set the violation information list to the customer profile
-                                Customer customerProfile = customer.getData().getCustomerProfile();
-                                customerProfile.setFwaLocationViolationInfos(violationInfos);
-
-                                return Mono.just(customerProfile);
-                            });
-                });
-    }
-
-    // Method to process each MTN and get the violation status
-    private FWALocationViolationInfo processMtn(String mtn, GetCasesResponse getCasesResponse) {
-        List<FWALocationViolationLines> violationLines = processLocationViolationCases(mtn, getCasesResponse);
-
-        if (violationLines.isEmpty()) {
-            return null; // No violations for this MTN
-        }
-
-        FWALocationViolationInfo violationInfo = new FWALocationViolationInfo();
-        violationInfo.setFwaLocationViolationLines(violationLines);
-
-        if (violationLines.size() > 1) {
-            violationInfo.setGenericLVBanner(true);
-        } else {
-            FWALocationViolationLines singleLine = violationLines.get(0);
-            violationInfo.setMtn(singleLine.getMin());
-            violationInfo.setCaseStatus(singleLine.getCaseStatus());
-            violationInfo.setGenericLVBanner(false);
-        }
-
-        return violationInfo;
-    }
-
-    // Method to process location violation cases based on the response from BPMHelper1
-    private List<FWALocationViolationLines> processLocationViolationCases(String mtn, GetCasesResponse getCasesResponse) {
-        return getCasesResponse.getCases().stream()
-                .filter(locationViolationCase -> locationViolationCase.getMtn().equals(mtn))
-                .map(locationViolationCase -> new FWALocationViolationLines(locationViolationCase.getMtn(), determineCaseStatus(locationViolationCase)))
-                .collect(Collectors.toList());
-    }
-
-    // Helper method to determine the case status for each violation
-    private String determineCaseStatus(LocationViolationCaseSearch locationViolationCase) {
-        if (locationViolationCase.isPending()) {
-            return "Pending-LVSpeedcap";
-        } else if (locationViolationCase.isApplied()) {
-            return "LVSpeedCapApplied";
-        } else {
-            return "GenericLVSpeedCap";
-        }
+    public Mono<SoeJsonResponse> getCustomerInfo_Lines(CustomerRequestType request) {
+        return retrieveCustomerInfoService.retrieveCustomerInfo_lines(request)
+            .flatMap(customerResponse -> {
+                // Add your customer profile processing logic here
+                
+                // Original logic continues...
+            });
     }
 }
+```
+
+### Integration of New Logic
+
+Add the following lines of code to your existing service class:
+
+1. **Step 1**: **Add the `BPMHelper1` dependency**
+
+   Just after the `RetrieveCustomerInfoService` dependency, add the `BPMHelper1` dependency:
+   
+   ```java
+   @Autowired
+   private BPMHelper1 bpmHelper1;
+   ```
+
+2. **Step 2**: **Invoke the BPM service and handle the response**
+
+   Inside the `flatMap` block where you already have `customerResponse`, add the following logic to get the location violation status and populate the `fwaLocationViolationLines` list:
+
+   ```java
+   return bpmHelper1.getLocationViolationStatus(AccountLandingConstants.CHANNEL_ID, request.getAccountNumber())
+       .flatMap(getCasesResponse -> {
+
+           // Initialize the list of FWALocationViolationLines
+           List<FWALocationViolationLines> fwaLocationViolationLines = new ArrayList<>();
+
+           // Implement logic to populate FWALocationViolationLines based on getCasesResponse
+           if (getCasesResponse.getTotalCases() > 1) {
+               // More than one case - Add generic message along with MTN
+               for (String mtn : request.getMtnList()) {
+                   FWALocationViolationLines violationLine = new FWALocationViolationLines();
+                   violationLine.setMtn(mtn);
+                   violationLine.setCaseStatus("GenericLVSpeedCap");
+                   fwaLocationViolationLines.add(violationLine);
+               }
+           } else if (getCasesResponse.getTotalCases() == 1) {
+               // Single case - Compare MTN and add specific message
+               String impactedMtn = getCasesResponse.getCaseByIndex(0).getImpactedMtn();
+               for (String mtn : request.getMtnList()) {
+                   FWALocationViolationLines violationLine = new FWALocationViolationLines();
+                   violationLine.setMtn(mtn);
+                   if (mtn.equals(impactedMtn)) {
+                       violationLine.setCaseStatus(getCasesResponse.getCaseByIndex(0).getStatus());
+                   } else {
+                       violationLine.setCaseStatus("GenericLVSpeedCap");
+                   }
+                   fwaLocationViolationLines.add(violationLine);
+               }
+           }
+
+           // Add the populated fwaLocationViolationLines to the SOE response
+           SoeJsonResponse soeJsonResponse = new SoeJsonResponse();
+           soeJsonResponse.setFwaLocationViolationLines(fwaLocationViolationLines);
+
+           // Add your customer profile processing logic here
+           soeJsonResponse.setCustomerProfile(customerResponse.getData().getCustomerProfile());
+
+           return Mono.just(soeJsonResponse);
+       });
+   ```
+
+3. **Final Step**: **Combine the two `flatMap` chains**
+
+   Make sure to combine the two `flatMap` blocks so that they flow sequentially. Here's how your method should look:
+
+   ```java
+   public Mono<SoeJsonResponse> getCustomerInfo_Lines(CustomerRequestType request) {
+       return retrieveCustomerInfoService.retrieveCustomerInfo_lines(request)
+           .flatMap(customerResponse -> {
+               return bpmHelper1.getLocationViolationStatus(AccountLandingConstants.CHANNEL_ID, request.getAccountNumber())
+                   .flatMap(getCasesResponse -> {
+
+                       List<FWALocationViolationLines> fwaLocationViolationLines = new ArrayList<>();
+
+                       if (getCasesResponse.getTotalCases() > 1) {
+                           for (String mtn : request.getMtnList()) {
+                               FWALocationViolationLines violationLine = new FWALocationViolationLines();
+                               violationLine.setMtn(mtn);
+                               violationLine.setCaseStatus("GenericLVSpeedCap");
+                               fwaLocationViolationLines.add(violationLine);
+                           }
+                       } else if (getCasesResponse.getTotalCases() == 1) {
+                           String impactedMtn = getCasesResponse.getCaseByIndex(0).getImpactedMtn();
+                           for (String mtn : request.getMtnList()) {
+                               FWALocationViolationLines violationLine = new FWALocationViolationLines();
+                               violationLine.setMtn(mtn);
+                               if (mtn.equals(impactedMtn)) {
+                                   violationLine.setCaseStatus(getCasesResponse.getCaseByIndex(0).getStatus());
+                               } else {
+                                   violationLine.setCaseStatus("GenericLVSpeedCap");
+                               }
+                               fwaLocationViolationLines.add(violationLine);
+                           }
+                       }
+
+                       SoeJsonResponse soeJsonResponse = new SoeJsonResponse();
+                       soeJsonResponse.setFwaLocationViolationLines(fwaLocationViolationLines);
+
+                       soeJsonResponse.setCustomerProfile(customerResponse.getData().getCustomerProfile());
+
+                       return Mono.just(soeJsonResponse);
+                   });
+           });
+   }
+   ```
+
+### Summary of Changes
+
+- **Autowired the `BPMHelper1`**: Added dependency injection for the helper class.
+- **Invoke `getLocationViolationStatus`**: Inside the `flatMap`, invoke this method and process its response to populate `fwaLocationViolationLines`.
+- **Build SOE Response**: After processing, the response is built, including both the `fwaLocationViolationLines` and `customerProfile`.
+
+With these steps, you can integrate the new logic without altering the structure of your existing service class.
