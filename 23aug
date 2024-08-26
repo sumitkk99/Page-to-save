@@ -210,3 +210,188 @@ public void testGetCustomerInfoLines_ExceptionHandling() {
     verify(bpmHelper1, never()).getLocationViolationStatus(anyString(), anyString());
 }
 ```
+
+Here’s how you can write the JUnit test cases starting from the feature flag logic (step 5) and continue to cover the rest of the service code:
+
+### 5. Testing Feature Flag Logic and Location Violation
+
+```java
+@Test
+void testGetCustomerInfoLinesWithFeatureFlagsAndLocationViolation() {
+    // Mocking request and feature flags
+    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
+    mockRequest.setAccountNumber("123-456");
+
+    Mono<Boolean> mockFeatureFlagMono = Mono.just(true);
+    Mono<GetCasesLVResponse> mockNwoCaseMono = Mono.just(getMockCasesLVResponse());
+    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
+
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+        .thenReturn(mockFeatureFlagMono);
+    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
+        .thenReturn(mockNwoCaseMono);
+    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
+        .thenReturn(mockCustomerInfo);
+
+    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
+
+    // Assert the result
+    StepVerifier.create(resultMono)
+        .assertNext(customer -> {
+            assertNotNull(customer);
+            assertNotNull(customer.getData().getCustomerProfile().getFwaLocationViolationInfo());
+            assertTrue(customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getIsGenericLVBanner());
+            assertEquals(1, customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getFwaLocationViolationLines().size());
+        })
+        .verifyComplete();
+}
+```
+
+### 6. Testing the Logic for WHW Details Map Population
+
+```java
+@Test
+void testGetCustomerInfoLinesWithWHWDetails() {
+    // Mocking request
+    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
+    mockRequest.setAccountNumber("123-456");
+
+    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
+    Mono<Boolean> mockFeatureFlagMono = Mono.just(false);
+
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+        .thenReturn(mockFeatureFlagMono);
+    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
+        .thenReturn(mockCustomerInfo);
+    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
+        .thenReturn(Mono.empty());
+
+    // Mock SPO response
+    Mono<Map<String, WHWEligibilitiesResponse>> mockSpoResponse = Mono.just(getMockSPOResponse());
+    when(service.getWHWSPOdetails(anyMap())).thenReturn(mockSpoResponse);
+
+    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
+
+    // Assert the result
+    StepVerifier.create(resultMono)
+        .assertNext(customer -> {
+            assertNotNull(customer);
+            assertNotNull(customer.getData().getCustomerProfile().getBillAccounts());
+            assertEquals("WHW_SPO_OFFER_CODE", customer.getData().getCustomerProfile().getBillAccounts().get(0).getMtns().get(0).getWhwspooffer().getSpoCategoryCode());
+        })
+        .verifyComplete();
+}
+```
+
+### 7. Testing Redis Upsert Logic
+
+```java
+@Test
+void testGetCustomerInfoLinesWithRedisUpsert() {
+    // Mocking request
+    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
+    mockRequest.setAccountNumber("123-456");
+
+    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
+    Mono<Boolean> mockFeatureFlagMono = Mono.just(false);
+
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+        .thenReturn(mockFeatureFlagMono);
+    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
+        .thenReturn(mockCustomerInfo);
+
+    Map<String, String> mockSessionData = new HashMap<>();
+    when(sessionHelper.upsertDataInRedisMono(anyMap())).thenReturn(Mono.just(mockSessionData));
+
+    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
+
+    // Assert the result
+    StepVerifier.create(resultMono)
+        .assertNext(customer -> {
+            assertNotNull(customer);
+            verify(sessionHelper).upsertDataInRedisMono(anyMap());
+        })
+        .verifyComplete();
+}
+```
+
+### 8. Testing with Multiple MTNs and Conditional Logic
+
+```java
+@Test
+void testGetCustomerInfoLinesWithMultipleMTNs() {
+    // Mocking request
+    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
+    mockRequest.setAccountNumber("123-456");
+
+    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponseWithMultipleMTNs());
+    Mono<Boolean> mockFeatureFlagMono = Mono.just(true);
+    Mono<GetCasesLVResponse> mockNwoCaseMono = Mono.just(getMockCasesLVResponseWithMultipleCases());
+
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+        .thenReturn(mockFeatureFlagMono);
+    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
+        .thenReturn(mockNwoCaseMono);
+    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
+        .thenReturn(mockCustomerInfo);
+
+    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
+
+    // Assert the result
+    StepVerifier.create(resultMono)
+        .assertNext(customer -> {
+            assertNotNull(customer);
+            assertTrue(customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getFwaLocationViolationLines().size() > 1);
+        })
+        .verifyComplete();
+}
+```
+
+### 9. Testing Error Handling and Edge Cases
+
+```java
+@Test
+void testGetCustomerInfoLinesErrorHandling() {
+    // Mocking request
+    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
+    mockRequest.setAccountNumber("123-456");
+
+    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
+        .thenReturn(Mono.error(new RuntimeException("CXP service failure")));
+
+    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
+
+    // Assert the result
+    StepVerifier.create(resultMono)
+        .expectError(RuntimeException.class)
+        .verify();
+}
+```
+
+### Mock Data Methods
+
+To support the above tests, you can create some helper methods to generate mock data:
+
+```java
+private GetCasesLVResponse getMockCasesLVResponse() {
+    // Implement mock GetCasesLVResponse generation
+}
+
+private CustomerProfileGraphQLAssistedResponse getMockCustomerProfileResponse() {
+    // Implement mock CustomerProfileGraphQLAssistedResponse generation
+}
+
+private Map<String, WHWEligibilitiesResponse> getMockSPOResponse() {
+    // Implement mock SPO response generation
+}
+
+private CustomerProfileGraphQLAssistedResponse getMockCustomerProfileResponseWithMultipleMTNs() {
+    // Implement mock CustomerProfileGraphQLAssistedResponse with multiple MTNs
+}
+
+private GetCasesLVResponse getMockCasesLVResponseWithMultipleCases() {
+    // Implement mock GetCasesLVResponse with multiple cases
+}
+```
+
+These test cases will ensure that the entire logic, starting from the feature flag checks to the final handling of MTNs and Redis upserts, is covered. Each case is designed to handle different scenarios that the service method might encounter.
