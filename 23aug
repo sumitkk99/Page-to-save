@@ -1,397 +1,117 @@
-To write JUnit test cases for the provided `getCustomerInfo_Lines` method, we'll use `Mockito` for mocking dependencies, `StepVerifier` for testing `Mono` results, and assertions to validate the expected outcomes. Below is a comprehensive example:
+To write JUnit test cases for the `BPMHelper1` class, you need to ensure that you test all the methods, especially focusing on scenarios that might occur in the `getLocationViolationStatus` and `buildLVGetCasesRequest` methods. Here's how you can write these test cases using JUnit 5 and Mockito:
 
-### 1. **JUnit Test Setup**
-   First, ensure your test class is properly set up to use `JUnit` and `Mockito`.
+### 1. Setup
+First, ensure that your `BPMHelper1` class and its dependencies are mocked properly.
+
+### 2. JUnit Test Class for `BPMHelper1`
 
 ```java
+import onevz.soe.accountlanding.helpers.BPMHelper1;
+import onevz.soe.accountlanding.services.BPMServiceImpl;
+import onevz.soe.accountlanding.model.BPMServiceRequest;
+import onevz.soe.accountlanding.model.GetCasesLVResponse;
+import onevz.soe.accountlanding.constants.AccountLandingConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.util.*;
-
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class CustomerInfoServiceTest {
-
-    @Mock
-    private CxpCustomerService cxpCustomerService;
-
-    @Mock
-    private FeatureFlag featureFlag;
-
-    @Mock
-    private BpmHelper1 bpmHelper1;
-
-    @Mock
-    private SessionHelper sessionHelper;
+public class BPMHelper1Test {
 
     @InjectMocks
-    private CustomerInfoService customerInfoService;
+    private BPMHelper1 bpmHelper1;
+
+    @Mock
+    private BPMServiceImpl bpmServiceImpl;
 
     @BeforeEach
     public void setup() {
-        MockitoAnnotations.openMocks(this);
+        // Any setup steps, if necessary
     }
 
-    // Additional test setup (if necessary) goes here
+    @Test
+    public void testGetLocationViolationStatus_Success() {
+        // Prepare the data to return
+        GetCasesLVResponse response = new GetCasesLVResponse();
+        // Set any required fields in the response object
+
+        // Mock the BPMServiceImpl to return the response
+        when(bpmServiceImpl.invokeBPMGetCasesNWO(any(BPMServiceRequest.class)))
+                .thenReturn(Mono.just(response));
+
+        // Execute the method to test
+        Mono<GetCasesLVResponse> resultMono = bpmHelper1.getLocationViolationStatus("someChannelId", "someAccountNumber");
+
+        // Verify the results
+        StepVerifier.create(resultMono)
+                .expectNext(response)
+                .verifyComplete();
+
+        // Optionally, verify that the invokeBPMGetCasesNWO method was called with the correct request
+        Mockito.verify(bpmServiceImpl).invokeBPMGetCasesNWO(any(BPMServiceRequest.class));
+    }
+
+    @Test
+    public void testGetLocationViolationStatus_Failure() {
+        // Mock the BPMServiceImpl to return an error
+        when(bpmServiceImpl.invokeBPMGetCasesNWO(any(BPMServiceRequest.class)))
+                .thenReturn(Mono.error(new RuntimeException("BPM Service Error")));
+
+        // Execute the method to test
+        Mono<GetCasesLVResponse> resultMono = bpmHelper1.getLocationViolationStatus("someChannelId", "someAccountNumber");
+
+        // Verify the results
+        StepVerifier.create(resultMono)
+                .expectError(RuntimeException.class)
+                .verify();
+    }
+
+    @Test
+    public void testBuildLVGetCasesRequest() {
+        // Execute the method to test
+        BPMServiceRequest request = bpmHelper1.buildLVGetCasesRequest("someChannelId", "someAccountNumber");
+
+        // Verify the serviceHeader values
+        assertEquals("someChannelId", request.getServiceHeader().getClientId());
+        assertEquals(AccountLandingConstants.BPM_GET_CASES, request.getServiceHeader().getServiceName());
+
+        // Verify the serviceBody values
+        assertEquals("someAccountNumber", request.getServiceBody().getServiceRequest().getCaseSearch().getAccountNumber());
+        assertEquals(AccountLandingConstants.LV_INTENT, request.getServiceBody().getServiceRequest().getCaseSearch().getIntent());
+        assertEquals(AccountLandingConstants.LV_CASESTATUS, request.getServiceBody().getServiceRequest().getCaseSearch().getCaseStatus());
+        assertEquals(AccountLandingConstants.LV_CASETYPE, request.getServiceBody().getServiceRequest().getCaseSearch().getCaseType().get(0));
+    }
 }
 ```
 
-### 2. **Test Cases**
+### Explanation:
 
-#### **Test 1: Successful Response with Location Violation Enabled**
-This test case simulates the scenario where the location violation feature is enabled and returns expected data.
+1. **Test Setup**:
+   - `@InjectMocks` is used to create an instance of the `BPMHelper1` class, and its dependencies are automatically injected.
+   - `@Mock` is used to mock the `BPMServiceImpl` class, which is used by `BPMHelper1`.
+   - `@ExtendWith(MockitoExtension.class)` is used to integrate Mockito with JUnit 5.
 
-```java
-@Test
-public void testGetCustomerInfoLines_LocationViolationEnabled() {
-    // Arrange
-    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
-    request.setAccountNumber("12345-67890");
+2. **Test Methods**:
+   - `testGetLocationViolationStatus_Success`: Tests the successful execution of the `getLocationViolationStatus` method. It uses `StepVerifier` to verify the results.
+   - `testGetLocationViolationStatus_Failure`: Tests the failure scenario where `invokeBPMGetCasesNWO` throws an exception.
+   - `testBuildLVGetCasesRequest`: Verifies that the `buildLVGetCasesRequest` method constructs the `BPMServiceRequest` correctly.
 
-    CustomerRequestType customerRequestType = new CustomerRequestType();
-    customerRequestType.setCustomerId(request.getAccountNumber());
-    customerRequestType.setRetrieveDeactivePriceplans(true);
+3. **Assertions**:
+   - Use `assertEquals` to verify that the fields in `BPMServiceRequest` are correctly set.
 
-    CustomerProfileGraphQLAssistedResponse customerProfileResponse = new CustomerProfileGraphQLAssistedResponse();
-    CustomerProfile customerProfile = new CustomerProfile();
-    customerProfile.setBillAccounts(new ArrayList<>());
-    Data data = new Data();
-    data.setCustomerProfile(customerProfile);
-    customerProfileResponse.setData(data);
+4. **Mocking**:
+   - The `when(...).thenReturn(...)` method is used to simulate the behavior of the `BPMServiceImpl`.
 
-    GetCasesLVResponse casesLVResponse = new GetCasesLVResponse();
-    List<Case> cases = new ArrayList<>();
-    Case lvCase = new Case();
-    lvCase.setMtnImpacted("9087654321");
-    lvCase.setCaseStatus("Pending-LVSpeedcap");
-    cases.add(lvCase);
-    casesLVResponse.setServiceBody(new ServiceBody(new ServiceResponse(cases)));
+### Running the Tests:
+You can run these tests in your IDE or using a build tool like Maven or Gradle. Ensure that all dependencies are correctly configured in your `pom.xml` or `build.gradle` file.
 
-    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
-            .thenReturn(Mono.just(customerProfileResponse));
-    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
-            .thenReturn(Mono.just(casesLVResponse));
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-            .thenReturn(Mono.just(true));
-    when(sessionHelper.upsertDataInRedisMono(anyMap()))
-            .thenReturn(Mono.just(new HashMap<>()));
-
-    // Act
-    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
-
-    // Assert
-    StepVerifier.create(result)
-            .expectNextMatches(customerProfileResult -> {
-                assertNotNull(customerProfileResult.getFwaLocationViolationInfo());
-                assertTrue(customerProfileResult.getFwaLocationViolationInfo().isGenericLVBanner());
-                assertEquals(1, customerProfileResult.getFwaLocationViolationInfo().getFwaLocationViolationLines().size());
-                return true;
-            })
-            .verifyComplete();
-
-    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
-    verify(bpmHelper1, times(1)).getLocationViolationStatus(anyString(), anyString());
-    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
-    verify(sessionHelper, times(1)).upsertDataInRedisMono(anyMap());
-}
-```
-
-#### **Test 2: Location Violation Disabled**
-This test case simulates the scenario where the location violation feature is disabled and skips the logic.
-
-```java
-@Test
-public void testGetCustomerInfoLines_LocationViolationDisabled() {
-    // Arrange
-    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
-    request.setAccountNumber("12345-67890");
-
-    CustomerProfileGraphQLAssistedResponse customerProfileResponse = new CustomerProfileGraphQLAssistedResponse();
-    CustomerProfile customerProfile = new CustomerProfile();
-    customerProfile.setBillAccounts(new ArrayList<>());
-    Data data = new Data();
-    data.setCustomerProfile(customerProfile);
-    customerProfileResponse.setData(data);
-
-    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
-            .thenReturn(Mono.just(customerProfileResponse));
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-            .thenReturn(Mono.just(false));
-    when(sessionHelper.upsertDataInRedisMono(anyMap()))
-            .thenReturn(Mono.just(new HashMap<>()));
-
-    // Act
-    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
-
-    // Assert
-    StepVerifier.create(result)
-            .expectNextMatches(customerProfileResult -> {
-                assertNull(customerProfileResult.getFwaLocationViolationInfo());
-                return true;
-            })
-            .verifyComplete();
-
-    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
-    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
-    verify(sessionHelper, times(1)).upsertDataInRedisMono(anyMap());
-    verify(bpmHelper1, never()).getLocationViolationStatus(anyString(), anyString());
-}
-```
-
-### **Test 3: Empty Response Handling**
-This test case checks how the service handles an empty response from the dependencies.
-
-```java
-@Test
-public void testGetCustomerInfoLines_EmptyResponse() {
-    // Arrange
-    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
-    request.setAccountNumber("12345-67890");
-
-    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
-            .thenReturn(Mono.empty());
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-            .thenReturn(Mono.just(true));
-    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
-            .thenReturn(Mono.empty());
-
-    // Act
-    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
-
-    // Assert
-    StepVerifier.create(result)
-            .expectComplete()
-            .verify();
-
-    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
-    verify(bpmHelper1, times(1)).getLocationViolationStatus(anyString(), anyString());
-    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
-}
-```
-
-### **Test 4: Exception Handling**
-This test case ensures that any exceptions thrown by dependencies are correctly handled.
-
-```java
-@Test
-public void testGetCustomerInfoLines_ExceptionHandling() {
-    // Arrange
-    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
-    request.setAccountNumber("12345-67890");
-
-    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
-            .thenReturn(Mono.error(new RuntimeException("Error retrieving customer info")));
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-            .thenReturn(Mono.just(true));
-
-    // Act
-    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
-
-    // Assert
-    StepVerifier.create(result)
-            .expectErrorMatches(throwable -> throwable instanceof RuntimeException &&
-                    throwable.getMessage().equals("Error retrieving customer info"))
-            .verify();
-
-    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
-    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
-    verify(bpmHelper1, never()).getLocationViolationStatus(anyString(), anyString());
-}
-```
-
-Here’s how you can write the JUnit test cases starting from the feature flag logic (step 5) and continue to cover the rest of the service code:
-
-### 5. Testing Feature Flag Logic and Location Violation
-
-```java
-@Test
-void testGetCustomerInfoLinesWithFeatureFlagsAndLocationViolation() {
-    // Mocking request and feature flags
-    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
-    mockRequest.setAccountNumber("123-456");
-
-    Mono<Boolean> mockFeatureFlagMono = Mono.just(true);
-    Mono<GetCasesLVResponse> mockNwoCaseMono = Mono.just(getMockCasesLVResponse());
-    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
-
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-        .thenReturn(mockFeatureFlagMono);
-    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
-        .thenReturn(mockNwoCaseMono);
-    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
-        .thenReturn(mockCustomerInfo);
-
-    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
-
-    // Assert the result
-    StepVerifier.create(resultMono)
-        .assertNext(customer -> {
-            assertNotNull(customer);
-            assertNotNull(customer.getData().getCustomerProfile().getFwaLocationViolationInfo());
-            assertTrue(customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getIsGenericLVBanner());
-            assertEquals(1, customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getFwaLocationViolationLines().size());
-        })
-        .verifyComplete();
-}
-```
-
-### 6. Testing the Logic for WHW Details Map Population
-
-```java
-@Test
-void testGetCustomerInfoLinesWithWHWDetails() {
-    // Mocking request
-    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
-    mockRequest.setAccountNumber("123-456");
-
-    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
-    Mono<Boolean> mockFeatureFlagMono = Mono.just(false);
-
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-        .thenReturn(mockFeatureFlagMono);
-    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
-        .thenReturn(mockCustomerInfo);
-    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
-        .thenReturn(Mono.empty());
-
-    // Mock SPO response
-    Mono<Map<String, WHWEligibilitiesResponse>> mockSpoResponse = Mono.just(getMockSPOResponse());
-    when(service.getWHWSPOdetails(anyMap())).thenReturn(mockSpoResponse);
-
-    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
-
-    // Assert the result
-    StepVerifier.create(resultMono)
-        .assertNext(customer -> {
-            assertNotNull(customer);
-            assertNotNull(customer.getData().getCustomerProfile().getBillAccounts());
-            assertEquals("WHW_SPO_OFFER_CODE", customer.getData().getCustomerProfile().getBillAccounts().get(0).getMtns().get(0).getWhwspooffer().getSpoCategoryCode());
-        })
-        .verifyComplete();
-}
-```
-
-### 7. Testing Redis Upsert Logic
-
-```java
-@Test
-void testGetCustomerInfoLinesWithRedisUpsert() {
-    // Mocking request
-    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
-    mockRequest.setAccountNumber("123-456");
-
-    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponse());
-    Mono<Boolean> mockFeatureFlagMono = Mono.just(false);
-
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-        .thenReturn(mockFeatureFlagMono);
-    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
-        .thenReturn(mockCustomerInfo);
-
-    Map<String, String> mockSessionData = new HashMap<>();
-    when(sessionHelper.upsertDataInRedisMono(anyMap())).thenReturn(Mono.just(mockSessionData));
-
-    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
-
-    // Assert the result
-    StepVerifier.create(resultMono)
-        .assertNext(customer -> {
-            assertNotNull(customer);
-            verify(sessionHelper).upsertDataInRedisMono(anyMap());
-        })
-        .verifyComplete();
-}
-```
-
-### 8. Testing with Multiple MTNs and Conditional Logic
-
-```java
-@Test
-void testGetCustomerInfoLinesWithMultipleMTNs() {
-    // Mocking request
-    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
-    mockRequest.setAccountNumber("123-456");
-
-    Mono<CustomerProfileGraphQLAssistedResponse> mockCustomerInfo = Mono.just(getMockCustomerProfileResponseWithMultipleMTNs());
-    Mono<Boolean> mockFeatureFlagMono = Mono.just(true);
-    Mono<GetCasesLVResponse> mockNwoCaseMono = Mono.just(getMockCasesLVResponseWithMultipleCases());
-
-    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
-        .thenReturn(mockFeatureFlagMono);
-    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
-        .thenReturn(mockNwoCaseMono);
-    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
-        .thenReturn(mockCustomerInfo);
-
-    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
-
-    // Assert the result
-    StepVerifier.create(resultMono)
-        .assertNext(customer -> {
-            assertNotNull(customer);
-            assertTrue(customer.getData().getCustomerProfile().getFwaLocationViolationInfo().getFwaLocationViolationLines().size() > 1);
-        })
-        .verifyComplete();
-}
-```
-
-### 9. Testing Error Handling and Edge Cases
-
-```java
-@Test
-void testGetCustomerInfoLinesErrorHandling() {
-    // Mocking request
-    GetCustomerInfoRequest mockRequest = new GetCustomerInfoRequest();
-    mockRequest.setAccountNumber("123-456");
-
-    when(cxpCustomerService.retrieveCustomerInfolines(any(CustomerRequestType.class)))
-        .thenReturn(Mono.error(new RuntimeException("CXP service failure")));
-
-    Mono<Customer> resultMono = service.getCustomerInfoLines(mockRequest);
-
-    // Assert the result
-    StepVerifier.create(resultMono)
-        .expectError(RuntimeException.class)
-        .verify();
-}
-```
-
-### Mock Data Methods
-
-To support the above tests, you can create some helper methods to generate mock data:
-
-```java
-private GetCasesLVResponse getMockCasesLVResponse() {
-    // Implement mock GetCasesLVResponse generation
-}
-
-private CustomerProfileGraphQLAssistedResponse getMockCustomerProfileResponse() {
-    // Implement mock CustomerProfileGraphQLAssistedResponse generation
-}
-
-private Map<String, WHWEligibilitiesResponse> getMockSPOResponse() {
-    // Implement mock SPO response generation
-}
-
-private CustomerProfileGraphQLAssistedResponse getMockCustomerProfileResponseWithMultipleMTNs() {
-    // Implement mock CustomerProfileGraphQLAssistedResponse with multiple MTNs
-}
-
-private GetCasesLVResponse getMockCasesLVResponseWithMultipleCases() {
-    // Implement mock GetCasesLVResponse with multiple cases
-}
-```
-
-These test cases will ensure that the entire logic, starting from the feature flag checks to the final handling of MTNs and Redis upserts, is covered. Each case is designed to handle different scenarios that the service method might encounter.
+This test suite will ensure that your helper methods are functioning correctly and will help you catch any issues early in the development process.
