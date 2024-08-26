@@ -1,21 +1,212 @@
-// Perform the first test and assert the expected outcomes
-    StepVerifier.create(service.getCustomerInfo_Lines(request))
-            .assertNext(customer -> {
-                assertThat(customer).isNotNull();
-                assertThat(customer.getBillAccounts()).isNotEmpty().hasSize(1);
-            })
-            .expectComplete()
-            .verify();
+To write JUnit test cases for the provided `getCustomerInfo_Lines` method, we'll use `Mockito` for mocking dependencies, `StepVerifier` for testing `Mono` results, and assertions to validate the expected outcomes. Below is a comprehensive example:
 
-    // Modify the assistedResponse to simulate null second number information
-    assistedResponse.getData().getCustomer().getBillAccounts().get(0).getMtns().get(0).setSecondNumberInfo(null);
+### 1. **JUnit Test Setup**
+   First, ensure your test class is properly set up to use `JUnit` and `Mockito`.
 
-    // Perform the second test and assert the expected outcomes
-    StepVerifier.create(service.getCustomerInfo_Lines(request))
-            .assertNext(customer -> {
-                assertThat(customer).isNotNull();
-                assertThat(customer.getBillAccounts()).isNotEmpty().hasSize(1);
-            })
-            .expectComplete()
-            .verify();
+```java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.util.StringUtils;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+public class CustomerInfoServiceTest {
+
+    @Mock
+    private CxpCustomerService cxpCustomerService;
+
+    @Mock
+    private FeatureFlag featureFlag;
+
+    @Mock
+    private BpmHelper1 bpmHelper1;
+
+    @Mock
+    private SessionHelper sessionHelper;
+
+    @InjectMocks
+    private CustomerInfoService customerInfoService;
+
+    @BeforeEach
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    // Additional test setup (if necessary) goes here
 }
+```
+
+### 2. **Test Cases**
+
+#### **Test 1: Successful Response with Location Violation Enabled**
+This test case simulates the scenario where the location violation feature is enabled and returns expected data.
+
+```java
+@Test
+public void testGetCustomerInfoLines_LocationViolationEnabled() {
+    // Arrange
+    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
+    request.setAccountNumber("12345-67890");
+
+    CustomerRequestType customerRequestType = new CustomerRequestType();
+    customerRequestType.setCustomerId(request.getAccountNumber());
+    customerRequestType.setRetrieveDeactivePriceplans(true);
+
+    CustomerProfileGraphQLAssistedResponse customerProfileResponse = new CustomerProfileGraphQLAssistedResponse();
+    CustomerProfile customerProfile = new CustomerProfile();
+    customerProfile.setBillAccounts(new ArrayList<>());
+    Data data = new Data();
+    data.setCustomerProfile(customerProfile);
+    customerProfileResponse.setData(data);
+
+    GetCasesLVResponse casesLVResponse = new GetCasesLVResponse();
+    List<Case> cases = new ArrayList<>();
+    Case lvCase = new Case();
+    lvCase.setMtnImpacted("9087654321");
+    lvCase.setCaseStatus("Pending-LVSpeedcap");
+    cases.add(lvCase);
+    casesLVResponse.setServiceBody(new ServiceBody(new ServiceResponse(cases)));
+
+    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
+            .thenReturn(Mono.just(customerProfileResponse));
+    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
+            .thenReturn(Mono.just(casesLVResponse));
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+            .thenReturn(Mono.just(true));
+    when(sessionHelper.upsertDataInRedisMono(anyMap()))
+            .thenReturn(Mono.just(new HashMap<>()));
+
+    // Act
+    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
+
+    // Assert
+    StepVerifier.create(result)
+            .expectNextMatches(customerProfileResult -> {
+                assertNotNull(customerProfileResult.getFwaLocationViolationInfo());
+                assertTrue(customerProfileResult.getFwaLocationViolationInfo().isGenericLVBanner());
+                assertEquals(1, customerProfileResult.getFwaLocationViolationInfo().getFwaLocationViolationLines().size());
+                return true;
+            })
+            .verifyComplete();
+
+    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
+    verify(bpmHelper1, times(1)).getLocationViolationStatus(anyString(), anyString());
+    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
+    verify(sessionHelper, times(1)).upsertDataInRedisMono(anyMap());
+}
+```
+
+#### **Test 2: Location Violation Disabled**
+This test case simulates the scenario where the location violation feature is disabled and skips the logic.
+
+```java
+@Test
+public void testGetCustomerInfoLines_LocationViolationDisabled() {
+    // Arrange
+    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
+    request.setAccountNumber("12345-67890");
+
+    CustomerProfileGraphQLAssistedResponse customerProfileResponse = new CustomerProfileGraphQLAssistedResponse();
+    CustomerProfile customerProfile = new CustomerProfile();
+    customerProfile.setBillAccounts(new ArrayList<>());
+    Data data = new Data();
+    data.setCustomerProfile(customerProfile);
+    customerProfileResponse.setData(data);
+
+    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
+            .thenReturn(Mono.just(customerProfileResponse));
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+            .thenReturn(Mono.just(false));
+    when(sessionHelper.upsertDataInRedisMono(anyMap()))
+            .thenReturn(Mono.just(new HashMap<>()));
+
+    // Act
+    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
+
+    // Assert
+    StepVerifier.create(result)
+            .expectNextMatches(customerProfileResult -> {
+                assertNull(customerProfileResult.getFwaLocationViolationInfo());
+                return true;
+            })
+            .verifyComplete();
+
+    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
+    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
+    verify(sessionHelper, times(1)).upsertDataInRedisMono(anyMap());
+    verify(bpmHelper1, never()).getLocationViolationStatus(anyString(), anyString());
+}
+```
+
+### **Test 3: Empty Response Handling**
+This test case checks how the service handles an empty response from the dependencies.
+
+```java
+@Test
+public void testGetCustomerInfoLines_EmptyResponse() {
+    // Arrange
+    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
+    request.setAccountNumber("12345-67890");
+
+    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
+            .thenReturn(Mono.empty());
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+            .thenReturn(Mono.just(true));
+    when(bpmHelper1.getLocationViolationStatus(anyString(), anyString()))
+            .thenReturn(Mono.empty());
+
+    // Act
+    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
+
+    // Assert
+    StepVerifier.create(result)
+            .expectComplete()
+            .verify();
+
+    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
+    verify(bpmHelper1, times(1)).getLocationViolationStatus(anyString(), anyString());
+    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
+}
+```
+
+### **Test 4: Exception Handling**
+This test case ensures that any exceptions thrown by dependencies are correctly handled.
+
+```java
+@Test
+public void testGetCustomerInfoLines_ExceptionHandling() {
+    // Arrange
+    GetCustomerInfoRequest request = new GetCustomerInfoRequest();
+    request.setAccountNumber("12345-67890");
+
+    when(cxpCustomerService.retrieveCustomerInfoLines(any(CustomerRequestType.class)))
+            .thenReturn(Mono.error(new RuntimeException("Error retrieving customer info")));
+    when(featureFlag.isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean()))
+            .thenReturn(Mono.just(true));
+
+    // Act
+    Mono<CustomerProfile> result = customerInfoService.getCustomerInfoLines(request);
+
+    // Assert
+    StepVerifier.create(result)
+            .expectErrorMatches(throwable -> throwable instanceof RuntimeException &&
+                    throwable.getMessage().equals("Error retrieving customer info"))
+            .verify();
+
+    verify(cxpCustomerService, times(1)).retrieveCustomerInfoLines(any(CustomerRequestType.class));
+    verify(featureFlag, times(1)).isFeatureEnabled(anyString(), anyString(), anyString(), anyBoolean());
+    verify(bpmHelper1, never()).getLocationViolationStatus(anyString(), anyString());
+}
+```
