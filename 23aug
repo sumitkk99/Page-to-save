@@ -1,13 +1,21 @@
-package onevz.soe.accountlanding.model.graphql.assisted;
+// Perform the first test and assert the expected outcomes
+    StepVerifier.create(service.getCustomerInfo_Lines(request))
+            .assertNext(customer -> {
+                assertThat(customer).isNotNull();
+                assertThat(customer.getBillAccounts()).isNotEmpty().hasSize(1);
+            })
+            .expectComplete()
+            .verify();
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.Data;
-import java.util.List;
+    // Modify the assistedResponse to simulate null second number information
+    assistedResponse.getData().getCustomer().getBillAccounts().get(0).getMtns().get(0).setSecondNumberInfo(null);
 
-@Data
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class FwaLocationViolationInfo {
-
-    private List<LocationViolationInfo> fwaLocationViolationLines;
-    private Boolean isGenericLVBanner;
+    // Perform the second test and assert the expected outcomes
+    StepVerifier.create(service.getCustomerInfo_Lines(request))
+            .assertNext(customer -> {
+                assertThat(customer).isNotNull();
+                assertThat(customer.getBillAccounts()).isNotEmpty().hasSize(1);
+            })
+            .expectComplete()
+            .verify();
 }
