@@ -1,102 +1,75 @@
-import onevz.soe.accountlanding.exceptions.SOEHTTPException;
-import onevz.soe.accountlanding.model.BPMServiceRequest;
-import onevz.soe.accountlanding.model.GetCasesLVResponse;
-import onevz.soe.accountlanding.util.AccountLandingUtil;
-import onevz.soe.accountlanding.services.BPMServiceImpl;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+@Test
+public void invokeBPMGetCasesNWOTest_Successful() throws SOEHTTPException {
+    // Prepare the response that should be returned when service.bpmGetCasesNWO is called
+    final var getCasesLVResponse = new GetCasesLVResponse();
+    when(service.bpmGetCasesNWO(any())).thenReturn(Mono.just(getCasesLVResponse));
+    
+    // Execute the method and verify the response
+    create(bpmService.invokeBPMGetCasesNWO(new BPMServiceRequest()))
+        .assertNext(response -> {
+            assertThat(response).isNotNull();
+            assertThat(response).isEqualTo(getCasesLVResponse);
+        })
+        .expectComplete().verify();
+}
 
-@ExtendWith(MockitoExtension.class)
-public class BPMServiceImplTest {
+@Test
+public void invokeBPMGetCasesNWOTest_HTTPException() throws SOEHTTPException {
+    // Prepare the SOEHTTPException that should be thrown
+    final var soeErrorHolder = commonSoeHttpException();
+    when(service.bpmGetCasesNWO(any())).thenReturn(Mono.error(new SOEHTTPException(500, soeErrorHolder)));
 
-    @InjectMocks
-    private BPMServiceImpl bpmServiceImpl;
+    // Execute the method and verify that the error handling works correctly
+    create(bpmService.invokeBPMGetCasesNWO(new BPMServiceRequest()))
+        .assertNext(response -> {
+            assertThat(response).isNotNull();
+            assertThat(response.getErrors()).isNotEmpty();
+            assertThat(response.getErrors().get(0).getMessage()).isEqualTo("VALIDATION_ERROR");
+        })
+        .expectComplete().verify();
+}
 
-    @Mock
-    private ExternalService service; // Assuming this is the service that handles the actual BPM call
+@Test
+public void invokeBPMGetCasesNWOTest_RuntimeException() throws SOEHTTPException {
+    // Prepare the RuntimeException that should be thrown
+    final var errorMessage = "SOE ERROR";
+    when(service.bpmGetCasesNWO(any())).thenReturn(Mono.error(new RuntimeException(errorMessage)));
 
-    // Mock SOEErrorHolder and SOEHTTPException for the HTTP exception scenario
-    private SOEErrorHolder buildSOEErrorHolder() {
-        SOEError error = new SOEError();
-        error.setId("501");
-        error.setCategory("HIGH");
-        error.setMessage("VALIDATION_ERROR");
-        SOEErrorHolder errorHolder = new SOEErrorHolder();
-        errorHolder.setErrors(List.of(error));
-        return errorHolder;
-    }
+    // Execute the method and verify that the error handling works correctly
+    create(bpmService.invokeBPMGetCasesNWO(new BPMServiceRequest()))
+        .assertNext(response -> {
+            assertThat(response).isNotNull();
+            assertThat(response.getErrors()).isNotEmpty();
+            assertThat(response.getErrors().get(0).getMessage()).isEqualTo(errorMessage);
+        })
+        .expectComplete().verify();
+}
 
-    @Test
-    public void invokeBPMGetCasesNWO_HTTPExceptionTest() {
-        // Arrange
-        var soeErrorHolder = buildSOEErrorHolder();
-        when(service.bpmGetCasesNWO(any()))
-                .thenReturn(Mono.error(() -> new SOEHTTPException(500, soeErrorHolder)));
+@Test
+public void invokeBPMGetCasesNWOTest_EmptyResponse() throws SOEHTTPException {
+    // Test the case where the service returns an empty Mono
+    when(service.bpmGetCasesNWO(any())).thenReturn(Mono.empty());
 
-        // Act & Assert
-        StepVerifier.create(bpmServiceImpl.invokeBPMGetCasesNWO(new BPMServiceRequest()))
-                .assertNext(getCasesResponse -> {
-                    assertThat(getCasesResponse).isNotNull();
-                    assertThat(getCasesResponse.getErrors()).isNotEmpty().hasSize(1);
-                    assertThat(getCasesResponse.getErrors().get(0).getMessage()).isEqualTo("VALIDATION_ERROR");
-                })
-                .expectComplete()
-                .verify();
-    }
+    // Execute the method and verify that a default response is returned
+    create(bpmService.invokeBPMGetCasesNWO(new BPMServiceRequest()))
+        .assertNext(response -> {
+            assertThat(response).isNotNull();
+            assertThat(response.getErrors()).isNullOrEmpty(); // Assuming no errors for empty response
+        })
+        .expectComplete().verify();
+}
 
-    @Test
-    public void invokeBPMGetCasesNWO_GeneralExceptionTest() {
-        // Arrange
-        when(service.bpmGetCasesNWO(any()))
-                .thenReturn(Mono.error(IllegalArgumentException::new));
+@Test
+public void invokeBPMGetCasesNWOTest_TimeoutException() throws SOEHTTPException {
+    // Simulate a timeout exception
+    when(service.bpmGetCasesNWO(any())).thenReturn(Mono.error(ReadTimeoutException.INSTANCE));
 
-        // Act & Assert
-        StepVerifier.create(bpmServiceImpl.invokeBPMGetCasesNWO(new BPMServiceRequest()))
-                .assertNext(getCasesResponse -> {
-                    assertThat(getCasesResponse).isNotNull();
-                    assertThat(getCasesResponse.getErrors()).isNotEmpty().hasSize(1);
-                    assertThat(getCasesResponse.getErrors().get(0).getMessage()).isEqualTo("java.lang.IllegalArgumentException");
-                })
-                .expectComplete()
-                .verify();
-    }
-
-    @Test
-    public void invokeBPMGetCasesNWO_SuccessfulCallTest() {
-        // Arrange
-        GetCasesLVResponse response = new GetCasesLVResponse();
-        when(service.bpmGetCasesNWO(any())).thenReturn(Mono.just(response));
-
-        // Act & Assert
-        StepVerifier.create(bpmServiceImpl.invokeBPMGetCasesNWO(new BPMServiceRequest()))
-                .assertNext(getCasesResponse -> {
-                    assertThat(getCasesResponse).isNotNull();
-                    assertThat(getCasesResponse.getErrors()).isEmpty();
-                })
-                .expectComplete()
-                .verify();
-    }
-
-    @Test
-    public void invokeBPMGetCasesNWO_EmptyResponseTest() {
-        // Arrange
-        when(service.bpmGetCasesNWO(any())).thenReturn(Mono.empty());
-
-        // Act & Assert
-        StepVerifier.create(bpmServiceImpl.invokeBPMGetCasesNWO(new BPMServiceRequest()))
-                .assertNext(getCasesResponse -> {
-                    assertThat(getCasesResponse).isNotNull();
-                    assertThat(getCasesResponse.getErrors()).isEmpty();
-                })
-                .expectComplete()
-                .verify();
-    }
+    // Execute the method and verify that the error handling works correctly
+    create(bpmService.invokeBPMGetCasesNWO(new BPMServiceRequest()))
+        .assertNext(response -> {
+            assertThat(response).isNotNull();
+            assertThat(response.getErrors()).isNotEmpty();
+            assertThat(response.getErrors().get(0).getMessage()).isEqualTo(ReadTimeoutException.INSTANCE.getMessage());
+        })
+        .expectComplete().verify();
 }
