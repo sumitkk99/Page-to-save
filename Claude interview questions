@@ -1,0 +1,1631 @@
+# Deloitte Technical Interview Questions and Answers Guide
+
+
+
+## Table of Contents
+
+1. [Communication between Microservices](#1-communication-between-microservices)
+
+2. [Encapsulation](#2-encapsulation)
+
+3. [Abstract Class vs Interface](#3-abstract-class-vs-interface)
+
+4. [Exception Handler](#4-exception-handler)
+
+5. [Handling Multiple Controller Requests](#5-handling-multiple-controller-requests)
+
+6. [Circuit Design Pattern](#6-circuit-design-pattern)
+
+7. [SOLID Design Principles](#7-solid-design-principles)
+
+8. [Default Methods](#8-default-methods)
+
+9. [Singleton Design Pattern](#9-singleton-design-pattern)
+
+10. [Static Blocks](#10-static-blocks)
+
+11. [Profiling in Spring Boot](#11-profiling-in-spring-boot)
+
+12. [String Equals and == Operator](#12-string-equals-and—operator)
+
+13. [PUT vs PATCH](#13-put-vs-patch)
+
+14. [final, finally, finalize](#14-final-finally-finalize)
+
+15. [@RequestParam vs @PathVariable](#15-requestparam-vs-pathvariable)
+
+16. [Database Configuration in Spring Boot](#16-database-configuration-in-spring-boot)
+
+17. [Dispatcher Servlet and Service Registry](#17-dispatcher-servlet-and-service-registry)
+
+18. [Executor Framework](#18-executor-framework)
+
+19. [Thread Lifecycle](#19-thread-lifecycle)
+
+20. [Thread Run Method](#20-thread-run-method)
+
+21. [Mockito Testing](#21-mockito-testing)
+
+22. [JPA findById Behavior](#22-jpa-findbyid-behavior)
+
+23. [Application Layer Flow](#23-application-layer-flow)
+
+24. [Sorting Integers](#24-sorting-integers)
+
+25. [Types of Exceptions](#25-types-of-exceptions)
+
+26. [Spring Actuator](#26-spring-actuator)
+
+
+
+## 1. Communication between Microservices
+
+
+
+Microservices can communicate through various patterns and protocols:
+
+
+
+### Synchronous Communication
+
+- **REST APIs**: HTTP-based communication
+
+- **gRPC**: High-performance RPC framework
+
+- **GraphQL**: Query language for APIs
+
+
+
+Example REST Controller:
+
+```java
+
+@RestController
+
+@RequestMapping(“/api/v1”)
+
+Public class UserController {
+
+    @GetMapping(“/users/{id}”)
+
+    Public ResponseEntity<User> getUser(@PathVariable Long id) {
+
+        Return userService.getUser(id);
+
+    }
+
+}
+
+```
+
+
+
+### Asynchronous Communication
+
+- **Message Brokers**: 
+
+  - Apache Kafka
+
+  - RabbitMQ
+
+  - Apache ActiveMQ
+
+- **Event-driven Architecture**
+
+
+
+Example Kafka Producer:
+
+```java
+
+@Service
+
+Public class KafkaProducerService {
+
+    @Autowired
+
+    Private KafkaTemplate<String, String> kafkaTemplate;
+
+
+
+    Public void sendMessage(String message) {
+
+        kafkaTemplate.send(“topic-name”, message);
+
+    }
+
+}
+
+```
+
+
+
+### Service Discovery
+
+- Netflix Eureka
+
+- Consul
+
+- Kubernetes Service Discovery
+
+
+
+## 2. Encapsulation
+
+
+
+Encapsulation is one of the four fundamental OOP concepts that bundles data with methods operating on that data within a single unit or object.
+
+
+
+### Key Principles
+
+1. Data Hiding
+
+2. Access Control
+
+3. Bundling of Data and Methods
+
+
+
+Example:
+
+```java
+
+Public class BankAccount {
+
+    Private double balance;  // private data
+
+    Private String accountNumber;
+
+
+
+    // Public methods to access private data
+
+    Public double getBalance() {
+
+        Return balance;
+
+    }
+
+
+
+    Public void deposit(double amount) {
+
+        If (amount > 0) {
+
+            Balance += amount;
+
+        }
+
+    }
+
+}
+
+```
+
+
+
+## 3. Abstract Class vs Interface
+
+
+
+### Abstract Class
+
+- Can have constructor
+
+- Can have instance variables
+
+- Can have concrete methods
+
+- Supports partial implementation
+
+- Single inheritance only
+
+
+
+```java
+
+Abstract class Animal {
+
+    Protected String name;
+
+    
+
+    Public Animal(String name) {
+
+        This.name = name;
+
+    }
+
+    
+
+    Abstract void makeSound();
+
+    
+
+    Public void eat() {
+
+        System.out.println(“Animal is eating”);
+
+    }
+
+}
+
+```
+
+
+
+### Interface
+
+- No constructor
+
+- Only static final variables
+
+- All methods are public abstract by default
+
+- Multiple inheritance possible
+
+- Can have default methods (Java 8+)
+
+
+
+```java
+
+Interface Flyable {
+
+    Void fly();
+
+    
+
+    Default void glide() {
+
+        System.out.println(“Gliding in air”);
+
+    }
+
+}
+
+```
+
+
+
+## 4. Exception Handler
+
+
+
+Spring Boot provides several ways to handle exceptions:
+
+
+
+### @ExceptionHandler
+
+```java
+
+@ControllerAdvice
+
+Public class GlobalExceptionHandler {
+
+    
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+
+    Public ResponseEntity<ErrorResponse> handleResourceNotFound(
+
+            ResourceNotFoundException ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+
+            LocalDateTime.now(),
+
+            Ex.getMessage(),
+
+            Request.getDescription(false)
+
+        );
+
+        Return new ResponseEntity<>(error, HttpStatus.NOT_FOUND);
+
+    }
+
+    
+
+    @ExceptionHandler(Exception.class)
+
+    Public ResponseEntity<ErrorResponse> handleGlobalException(
+
+            Exception ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+
+            LocalDateTime.now(),
+
+            Ex.getMessage(),
+
+            Request.getDescription(false)
+
+        );
+
+        Return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+
+    }
+
+}
+
+```
+
+
+
+## 5. Handling Multiple Controller Requests
+
+
+
+### Strategies for Handling Concurrent Requests:
+
+
+
+1.	**Async Processing**
+
+```java
+
+@RestController
+
+Public class AsyncController {
+
+    @Autowired
+
+    Private AsyncService service;
+
+    
+
+    @GetMapping(“/async-endpoint”)
+
+    Public CompletableFuture<String> handleAsync() {
+
+        Return service.asyncOperation();
+
+    }
+
+}
+
+
+
+@Service
+
+Public class AsyncService {
+
+    @Async
+
+    Public CompletableFuture<String> asyncOperation() {
+
+        // Async operation
+
+        Return CompletableFuture.completedFuture(“Result”);
+
+    }
+
+}
+
+```
+
+
+
+2.	**Thread Pooling**
+
+```java
+
+@Configuration
+
+Public class AsyncConfig {
+
+    @Bean
+
+    Public Executor taskExecutor() {
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+
+        Executor.setCorePoolSize(2);
+
+        Executor.setMaxPoolSize(2);
+
+        Executor.setQueueCapacity(500);
+
+        Executor.initialize();
+
+        Return executor;
+
+    }
+
+}
+
+```
+
+
+
+3.	**Rate Limiting**
+
+```java
+
+@Component
+
+Public class RateLimiter {
+
+    Private Map<String, TokenBucket> buckets = new ConcurrentHashMap<>();
+
+    
+
+    Public boolean tryConsume(String clientId) {
+
+        TokenBucket bucket = buckets.computeIfAbsent(
+
+            clientId, 
+
+            k -> new TokenBucket(10, 10)
+
+        );
+
+        Return bucket.tryConsume();
+
+    }
+
+}
+
+```
+
+
+
+## 6. Circuit Design Pattern
+
+
+
+The Circuit Breaker pattern prevents cascading failures in distributed systems.
+
+
+
+### Implementation with Resilience4j
+
+```java
+
+@Service
+
+Public class ServiceWithCircuitBreaker {
+
+    Private final CircuitBreaker circuitBreaker;
+
+    
+
+    Public ServiceWithCircuitBreaker() {
+
+        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
+
+            .failureRateThreshold(50)
+
+            .waitDurationInOpenState(Duration.ofMillis(1000))
+
+            .build();
+
+            
+
+        circuitBreaker = CircuitBreaker.of(“service”, config);
+
+    }
+
+    
+
+    Public String serviceCall() {
+
+        Return circuitBreaker.executeSupplier(() -> {
+
+            // Remote service call
+
+            Return “Service Response”;
+
+        });
+
+    }
+
+}
+
+```
+
+
+
+## 7. SOLID Design Principles
+
+
+
+### S – Single Responsibility Principle
+
+Each class should have only one reason to change.
+
+
+
+```java
+
+// Good example
+
+Class UserRepository {
+
+    Void save(User user) { /* ... */ }
+
+    User find(Long id) { /* ... */ }
+
+}
+
+
+
+Class UserValidator {
+
+    Boolean validate(User user) { /* ... */ }
+
+}
+
+```
+
+
+
+### O – Open/Closed Principle
+
+Software entities should be open for extension but closed for modification.
+
+
+
+### L – Liskov Substitution Principle
+
+Objects should be replaceable with their subtypes without affecting program correctness.
+
+
+
+### I – Interface Segregation Principle
+
+Clients should not be forced to depend on interfaces they don’t use.
+
+
+
+### D – Dependency Inversion Principle
+
+High-level modules should not depend on low-level modules. Both should depend on abstractions.
+
+
+
+## 8. Default Methods
+
+
+
+Default methods allow adding new methods to interfaces without breaking existing implementations.
+
+
+
+```java
+
+Public interface Vehicle {
+
+    Void start();
+
+    
+
+    Default void stop() {
+
+        System.out.println(“Default stop implementation”);
+
+    }
+
+}
+
+
+
+Public class Car implements Vehicle {
+
+    @Override
+
+    Public void start() {
+
+        System.out.println(“Car starting”);
+
+    }
+
+    // stop() is inherited from Vehicle
+
+}
+
+```
+
+
+
+## 9. Singleton Design Pattern
+
+
+
+Ensures a class has only one instance and provides global point of access.
+
+
+
+```java
+
+Public class Singleton {
+
+    Private static volatile Singleton instance;
+
+    Private Singleton() {}
+
+    
+
+    Public static Singleton getInstance() {
+
+        If (instance == null) {
+
+            Synchronized (Singleton.class) {
+
+                If (instance == null) {
+
+                    Instance = new Singleton();
+
+                }
+
+            }
+
+        }
+
+        Return instance;
+
+    }
+
+}
+
+```
+
+
+
+## 10. Static Blocks
+
+
+
+Static blocks are executed when class is loaded, before any static methods are called.
+
+
+
+```java
+
+Public class StaticBlockExample {
+
+    Static {
+
+        System.out.println(“Static block executed”);
+
+    }
+
+    
+
+    Public static void main(String[] args) {
+
+        System.out.println(“Main method executed”);
+
+    }
+
+}
+
+```
+
+
+
+## 11. Profiling in Spring Boot
+
+
+
+### Actuator Configuration
+
+```yaml
+
+Management:
+
+  Endpoints:
+
+    Web:
+
+      Exposure:
+
+        Include: “*”
+
+  Endpoint:
+
+    Health:
+
+      Show-details: always
+
+```
+
+
+
+### Custom Metrics
+
+```java
+
+@Component
+
+Public class MetricsService {
+
+    Private final MeterRegistry registry;
+
+    
+
+    Public MetricsService(MeterRegistry registry) {
+
+        This.registry = registry;
+
+    }
+
+    
+
+    Public void recordOperation() {
+
+        Registry.counter(“custom.metric”).increment();
+
+    }
+
+}
+
+```
+
+
+
+## 12. String Equals and == Operator
+
+
+
+```java
+
+String s1 = “hello”;
+
+String s2 = “hello”;
+
+String s3 = new String(“hello”);
+
+
+
+System.out.println(s1 == s2);      // true (same string pool reference)
+
+System.out.println(s1 == s3);      // false (different objects)
+
+System.out.println(s1.equals(s3)); // true (same content)
+
+```
+
+
+
+## 13. PUT vs PATCH
+
+
+
+### PUT
+
+- Full resource update
+
+- Idempotent
+
+- Replaces entire resource
+
+
+
+```java
+
+@PutMapping(“/users/{id}”)
+
+Public ResponseEntity<User> updateUser(@PathVariable Long id, @RequestBody User user) {
+
+    Return userService.updateUser(id, user);
+
+}
+
+```
+
+
+
+### PATCH
+
+- Partial resource update
+
+- Updates only specified fields
+
+
+
+```java
+
+@PatchMapping(“/users/{id}”)
+
+Public ResponseEntity<User> partialUpdateUser(
+
+        @PathVariable Long id, 
+
+        @RequestBody Map<String, Object> updates) {
+
+    Return userService.partialUpdate(id, updates);
+
+}
+
+```
+
+
+
+## 14. Final, finally, finalize
+
+
+
+### final
+
+- Variables: Cannot be changed after initialization
+
+- Methods: Cannot be overridden
+
+- Classes: Cannot be inherited
+
+
+
+```java
+
+Final class FinalClass {
+
+    Final int value = 10;
+
+    
+
+    Final void method() {
+
+        // Cannot be overridden
+
+    }
+
+}
+
+```
+
+
+
+### finally
+
+Used in try-catch blocks, always executes
+
+
+
+```java
+
+Try {
+
+    // Some code
+
+} catch (Exception e) {
+
+    // Handle exception
+
+} finally {
+
+    // Always executes
+
+}
+
+```
+
+
+
+### finalize
+
+Method called by garbage collector before object destruction
+
+
+
+## 15. @RequestParam vs @PathVariable
+
+
+
+### @RequestParam
+
+For query parameters
+
+```java
+
+// URL: /api/users?page=1&size=10
+
+@GetMapping(“/users”)
+
+Public List<User> getUsers(
+
+    @RequestParam(defaultValue = “1”) int page,
+
+    @RequestParam(defaultValue = “10”) int size) {
+
+    Return userService.getUsers(page, size);
+
+}
+
+```
+
+
+
+### @PathVariable
+
+For path parameters
+
+```java
+
+// URL: /api/users/123
+
+@GetMapping(“/users/{id}”)
+
+Public User getUser(@PathVariable Long id) {
+
+    Return userService.getUser(id);
+
+}
+
+```
+
+
+
+## 16. Database Configuration in Spring Boot
+
+
+
+### Application Properties
+
+```yaml
+
+Spring:
+
+  Datasource:
+
+    url: jdbc:postgresql://localhost:5432/dbname
+
+    username: user
+
+    password: password
+
+  jpa:
+
+    hibernate:
+
+      ddl-auto: update
+
+    show-sql: true
+
+```
+
+
+
+### Configuration Class
+
+```java
+
+@Configuration
+
+Public class DatabaseConfig {
+
+    @Bean
+
+    Public DataSource dataSource() {
+
+        HikariConfig config = new HikariConfig();
+
+        Config.setJdbcUrl(“jdbc:postgresql://localhost:5432/dbname”);
+
+        Config.setUsername(“user”);
+
+        Config.setPassword(“password”);
+
+        Return new HikariDataSource(config);
+
+    }
+
+}
+
+```
+
+
+
+## 17. Dispatcher Servlet and Service Registry
+
+
+
+### Dispatcher Servlet
+
+Central servlet for Spring MVC handling all requests
+
+
+
+```java
+
+@Configuration
+
+Public class WebConfig implements WebMvcConfigurer {
+
+    @Override
+
+    Public void addResourceHandlers(ResourceHandlerRegistry registry) {
+
+        Registry.addResourceHandler(“/static/**”)
+
+                .addResourceLocations(“classpath:/static/”);
+
+    }
+
+}
+
+```
+
+
+
+### Eureka Service Registry
+
+```java
+
+@SpringBootApplication
+
+@EnableEurekaServer
+
+Public class ServiceRegistryApplication {
+
+    Public static void main(String[] args) {
+
+        SpringApplication.run(ServiceRegistryApplication.class, args);
+
+    }
+
+}
+
+```
+
+
+
+## 18. Executor Framework
+
+
+
+```java
+
+@Configuration
+
+Public class ExecutorConfig {
+
+    @Bean
+
+    Public ExecutorService executorService() {
+
+        Return Executors.newFixedThreadPool(10);
+
+    }
+
+}
+
+
+
+@Service
+
+Public class AsyncService {
+
+    @Autowired
+
+    Private ExecutorService executorService;
+
+    
+
+    Public Future<String> asyncTask() {
+
+        Return executorService.submit(() -> {
+
+            // Task logic
+
+            Return “Result”;
+
+        });
+
+    }
+
+}
+
+```
+
+
+
+## 19. Thread Lifecycle
+
+
+
+1. New
+
+2. Runnable
+
+3. Running
+
+4. Blocked/Waiting
+
+5. Terminated
+
+
+
+```java
+
+Public class ThreadLifecycle extends Thread {
+
+    @Override
+
+    Public void run() {
+
+        // Thread is in RUNNING state
+
+        Try {
+
+            Thread.sleep(1000); // WAITING state
+
+        } catch (InterruptedException e) {
+
+            Thread.currentThread().interrupt();
+
+        }
+
+    } // TERMINATED state
+
+}
+
+```
+
+
+
+## 20. Thread Run Method
+
+
+
+No, you cannot run a thread by directly calling run(). Must use start().
+
+
+
+```java
+
+Public class ThreadExample extends Thread {
+
+    @Override
+
+    Public void run() {
+
+        System.out.println(“Thread running”);
+
+    }
+
+    
+
+    Public static void main(String[] args) {
+
+        ThreadExample thread = new ThreadExample();
+
+        Thread.start(); // Correct
+
+        // thread.run(); // Incorrect – runs in same thread
+
+    }
+
+}
+
+```
+
+
+
+## 21. Mockito Testing
+
+
+
+```java
+
+@ExtendWith(MockitoExtension.class)
+
+Public class UserServiceTest {
+
+    @Mock
+
+    Private UserRepository userRepository;
+
+    
+
+    @InjectMocks
+
+    Private UserService userService;
+
+    
+
+    @Test
+
+    Void testGetUser() {
+
+        // Arrange
+
+        User user = new User(1L, “John”);
+
+        When(userRepository.findById(1L)).thenReturn(Optional.of(user));
+
+        
+
+        // Act
+
+        User result = userService.getUser(1L);
+
+        
+
+        // Assert
+
+        assertNotNull(result);
+
+        assertEquals(“John”, result.getName());
+
+        verify(userRepository).findById(1L);
+
+    }
+
+}
+
+```
+
+
+
+Common Mockito annotations:
+
+- `@Mock`: Creates a mock object
+
+- `@InjectMocks`: Creates object and injects mocked dependencies
+
+- `@Spy`: Creates a real object and spies on it
+
+- `@Captor`: Creates argument captor
+
+
+
+## 22. JPA findById Behavior
+
+
+
+When using JPA’s findById with no record found:
+
+```java
+
+@Service
+
+Public class UserService {
+
+    @Autowired
+
+    Private UserRepository userRepository;
+
+    
+
+    Public User findUser(Long id) {
+
+        // Returns Optional.empty() if not found
+
+        // No exception is thrown
+
+        Return userRepository.findById(id)
+
+            .orElseThrow(() -> new ResourceNotFoundException(“User not found”));
+
+    }
+
+}
+
+
+
+// Custom query behavior
+
+@Repository
+
+Public interface UserRepository extends JpaRepository<User, Long> {
+
+    // Returns null if not found
+
+    User findByEmail(String email);
+
+    
+
+    // Returns empty list if none found
+
+    List<User> findByLastName(String lastName);
+
+}
+
+```
+
+
+
+## 23. Application Layer Flow and API Creation
+
+
+
+### Layer Architecture
+
+```java
+
+// Controller Layer
+
+@RestController
+
+@RequestMapping(“/api/users”)
+
+Public class UserController {
+
+    @Autowired
+
+    Private UserService userService;
+
+    
+
+    @GetMapping(“/{id}”)
+
+    Public ResponseEntity<UserDTO> getUser(@PathVariable Long id) {
+
+        Return ResponseEntity.ok(userService.getUser(id));
+
+    }
+
+}
+
+
+
+// Service Layer
+
+@Service
+
+Public class UserService {
+
+    @Autowired
+
+    Private UserRepository userRepository;
+
+    @Autowired
+
+    Private UserMapper userMapper;
+
+    
+
+    Public UserDTO getUser(Long id) {
+
+        User user = userRepository.findById(id)
+
+            .orElseThrow(() -> new ResourceNotFoundException(“User not found”));
+
+        Return userMapper.toDTO(user);
+
+    }
+
+}
+
+
+
+// Repository Layer
+
+@Repository
+
+Public interface UserRepository extends JpaRepository<User, Long> {
+
+    // Database operations
+
+}
+
+```
+
+
+
+## 24. Sorting Integers in Ascending Order
+
+
+
+```java
+
+Public class SortingExample {
+
+    // Using Arrays.sort
+
+    Public int[] sortArray(int[] numbers) {
+
+        Arrays.sort(numbers);
+
+        Return numbers;
+
+    }
+
+    
+
+    // Using Stream API
+
+    Public List<Integer> sortList(List<Integer> numbers) {
+
+        Return numbers.stream()
+
+            .sorted()
+
+            .collect(Collectors.toList());
+
+    }
+
+    
+
+    // Custom implementation (Bubble Sort)
+
+    Public int[] bubbleSort(int[] arr) {
+
+        Int n = arr.length;
+
+        For (int i = 0; i < n – 1; i++) {
+
+            For (int j = 0; j < n – i – 1; j++) {
+
+                If (arr[j] > arr[j + 1]) {
+
+                    Int temp = arr[j];
+
+                    Arr[j] = arr[j + 1];
+
+                    Arr[j + 1] = temp;
+
+                }
+
+            }
+
+        }
+
+        Return arr;
+
+    }
+
+}
+
+```
+
+
+
+## 25. Types of Exceptions with Examples
+
+
+
+### Checked Exceptions
+
+```java
+
+// Custom checked exception
+
+Public class FileProcessingException extends Exception {
+
+    Public FileProcessingException(String message) {
+
+        Super(message);
+
+    }
+
+}
+
+
+
+// Using checked exception
+
+Public class FileProcessor {
+
+    Public void processFile(String path) throws FileProcessingException {
+
+        Try {
+
+            Files.readAllLines(Path.of(path));
+
+        } catch (IOException e) {
+
+            Throw new FileProcessingException(“Error processing file: “ + e.getMessage());
+
+        }
+
+    }
+
+}
+
+```
+
+
+
+### Unchecked Exceptions
+
+```java
+
+// Custom runtime exception
+
+Public class BusinessException extends RuntimeException {
+
+    Public BusinessException(String message) {
+
+        Super(message);
+
+    }
+
+}
+
+
+
+// Using unchecked exception
+
+Public class BusinessService {
+
+    Public void processBusinessLogic(String input) {
+
+        If (input == null || input.isEmpty()) {
+
+            Throw new BusinessException(“Input cannot be empty”);
+
+        }
+
+    }
+
+}
+
+```
+
+
+
+### Common Exception Scenarios
+
+```java
+
+Try {
+
+    // ArrayIndexOutOfBoundsException
+
+    Int[] arr = new int[5];
+
+    Arr[10] = 50;
+
+    
+
+    // NullPointerException
+
+    String str = null;
+
+    Str.length();
+
+    
+
+    // NumberFormatException
+
+    Int num = Integer.parseInt(“abc”);
+
+    
+
+    // ClassCastException
+
+    Object obj = new Integer(100);
+
+    String str2 = (String) obj;
+
+    
+
+} catch (Exception e) {
+
+    e.printStackTrace();
+
+}
+
+```
+
+
+
+## 26. Spring Actuator Implementation
+
+
+
+### Configuration
+
+```yaml
+
+Management:
+
+  Endpoints:
+
+    Web:
+
+      Exposure:
+
+        Include: health,info,metrics,prometheus
+
+  Endpoint:
+
+    Health:
+
+      Show-details: always
