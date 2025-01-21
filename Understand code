@@ -1,0 +1,225 @@
+# Java Spring Reactive Codebase: 1-Week Learning & Development Plan
+
+## Day 1-2: Foundation & Setup
+### Morning: Project Setup & Basic Understanding
+1. Environment Setup
+   - Install/verify Java 17
+   - Set up IDE (Your project uses Spring Tool Suite/Eclipse)
+   - Clone the repository
+   - Run `mvn clean install` to build project
+   - Configure application.properties/yml
+
+2. Basic Debugging Setup
+   ```java
+   // Add these debug points first:
+   - Service layer entry points (onevz.soe.plan.service.impl.*)
+   - GraphQL resolvers
+   - Main application class
+   ```
+
+3. Running in Debug Mode
+   - Right-click project → Debug As → Spring Boot App
+   - Use breakpoints to pause execution
+   - Watch variables in Debug perspective
+   - Use "Step Into" (F5) to go inside methods
+   - Use "Step Over" (F6) to execute current line
+
+### Afternoon: Understanding Project Structure
+1. Key Packages to Study:
+   ```
+   onevz.soe.plan.service - Business logic
+   onevz.soe.plan.model - Data structures
+   onevz.soe.plan.controller - API endpoints
+   graphql/* - API definitions
+   ```
+
+2. Create a simple flowchart:
+   ```
+   Request → GraphQL → Controller → Service → Repository → Database
+   ```
+
+## Day 3-4: Deep Dive into Code
+### Morning: Study Existing Code
+1. Pick a Simple Flow (e.g., Get Plan Details):
+   ```java
+   // Follow this in debugger:
+   1. Find GraphQL query in .graphql files
+   2. Locate corresponding resolver
+   3. Track through service layer
+   4. Watch data transformations
+   ```
+
+2. Code Reading Exercise:
+   ```java
+   // Start with simple services like:
+   onevz.soe.plan.service.impl.PlanServiceImpl
+   
+   // Look for patterns:
+   - How error handling is done
+   - How reactive streams are used
+   - How data is transformed
+   ```
+
+### Afternoon: Understanding Reactive Programming
+1. Key Concepts:
+   ```java
+   // Study these reactive types:
+   Mono<T> - For single results
+   Flux<T> - For multiple results
+   
+   // Example:
+   public Mono<Plan> getPlan(String id) {
+       return planRepository.findById(id)
+           .map(this::transformPlan)
+           .onErrorResume(ex -> handleError(ex));
+   }
+   ```
+
+## Day 5: GraphQL & API Layer
+### Morning: GraphQL Basics
+1. Study Schema Files:
+   ```graphql
+   # Look at existing schemas:
+   graphql/PLAN-GLOBAL/cart/component.graphql
+   graphql/PLAN-GLOBAL/catalog-plan/component.graphql
+   ```
+
+2. Test Queries:
+   ```graphql
+   # Use GraphiQL interface (usually at /graphiql):
+   query {
+     getPlan(id: "test") {
+       id
+       name
+       features
+     }
+   }
+   ```
+
+### Afternoon: Practice
+1. Create Test Queries:
+   ```graphql
+   # Try different queries and mutations
+   # Use GraphiQL's documentation explorer
+   ```
+
+## Day 6: Hands-on Practice
+### Morning: Small Tasks
+1. Add Logging:
+   ```java
+   private static final Logger log = LoggerFactory.getLogger(YourClass.class);
+   
+   public Mono<Plan> getPlan(String id) {
+       log.debug("Fetching plan with id: {}", id);
+       return planRepository.findById(id)
+           .doOnSuccess(plan -> log.info("Found plan: {}", plan.getId()))
+           .doOnError(ex -> log.error("Error finding plan: {}", ex.getMessage()));
+   }
+   ```
+
+2. Add Simple Feature:
+   ```java
+   // Add a method to existing service
+   public Mono<Boolean> isPlanActive(String planId) {
+       return getPlan(planId)
+           .map(plan -> plan.getStatus().equals("ACTIVE"))
+           .defaultIfEmpty(false);
+   }
+   ```
+
+## Day 7: Integration & Testing
+### Morning: Testing
+1. Study Existing Tests:
+   ```java
+   // Look at:
+   src/test/java/* - Test cases
+   src/test/resources/* - Test resources
+   ```
+
+2. Run Tests:
+   ```bash
+   mvn test
+   # Or run individual tests in IDE
+   ```
+
+### Afternoon: Documentation & Review
+1. Create Personal Notes:
+   - Document common patterns
+   - Note frequently used classes
+   - Create debug checklist
+
+## Debugging Tips
+
+### Basic Debugging
+1. Add Strategic Breakpoints:
+   ```java
+   // Add in service methods:
+   public Mono<Plan> getPlan(String id) {
+       // Breakpoint here
+       return planRepository.findById(id);
+   }
+   ```
+
+2. Use Logging for Flow Tracking:
+   ```java
+   log.info("Starting process for plan: {}", planId);
+   log.debug("Data received: {}", data);
+   log.error("Error occurred: {}", ex.getMessage(), ex);
+   ```
+
+### Advanced Debugging
+1. Reactive Debug Points:
+   ```java
+   // Add checkpoints in chains
+   return planRepository.findById(id)
+       .doOnNext(plan -> log.debug("Plan found: {}", plan))
+       .doOnError(ex -> log.error("Error: {}", ex))
+       .doFinally(signal -> log.debug("Operation completed"));
+   ```
+
+2. Use IDE Debug Features:
+   - Conditional breakpoints
+   - Watch expressions
+   - Evaluate expressions
+
+## Daily Learning Routine
+1. Morning:
+   - Review yesterday's notes
+   - Set learning goals
+   - Study code for 2 hours
+
+2. Afternoon:
+   - Practical exercises
+   - Debug existing features
+   - Document learnings
+
+3. Evening:
+   - Review and summarize
+   - Prepare questions for team
+   - Plan next day's focus
+
+## Additional Resources
+1. Documentation:
+   - Project README.md
+   - Spring WebFlux documentation
+   - GraphQL documentation
+
+2. Team Resources:
+   - Team wiki/confluence
+   - Code review comments
+   - Team meetings
+
+## Success Metrics
+By week's end, you should:
+1. Understand basic flow of requests
+2. Be able to run and debug the application
+3. Know how to make simple code changes
+4. Understand reactive programming basics
+5. Be comfortable with GraphQL queries
+
+## Remember
+- Take notes consistently
+- Don't hesitate to ask questions
+- Use debug mode frequently
+- Start with reading code before writing
+- Focus on understanding patterns
