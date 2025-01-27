@@ -1,0 +1,197 @@
+I'll explain the code snippet line by line in detail, highlighting the Java 8 features being used.
+
+
+---
+
+1. Function Signature
+
+public Mono<Map<String, Boolean>> fetchFeatureFlags() {
+
+Explanation:
+
+This method returns a Mono of a Map<String, Boolean>.
+
+Mono is part of Project Reactor (Reactive Programming), representing an asynchronous computation that emits at most one item or none.
+
+Here, it computes a map where the key is a feature flag name (String), and the value is whether the feature is enabled (Boolean).
+
+
+
+
+---
+
+2. Retrieving Cookie
+
+String infoCookie = requestContext.getCookie(Arrays.asList(planConstants.PREPAID_TO_POSTPAID_MIGRATION));
+
+Explanation:
+
+Retrieves a specific cookie (PREPAID_TO_POSTPAID_MIGRATION) from the request's context.
+
+This might be required to check user-specific or session-specific data.
+
+
+
+
+---
+
+3. Extracting Feature List from Cookie
+
+Mono<Map<String, Boolean>> featureFlagMapMono = Mono.just(swiftConfigFeatureFlagList.split(","));
+
+Explanation:
+
+Converts the feature flag list (comma-separated values) into an array of strings.
+
+Uses Mono.just() to wrap this operation into a Mono, ensuring it's handled reactively.
+
+
+
+
+---
+
+4. Reactive Feature Check
+
+Mono<Boolean> ngdNonCartFlowFlagMono = featureFlag.isFeatureEnabled(
+    FeatureFlagConstants.APPLICATION_DIGITAL,
+    FeatureFlagConstants.NGD_PLANS_NON_CART_FLOW,
+    false
+);
+
+Explanation:
+
+Checks if a feature (NGD_PLANS_NON_CART_FLOW) is enabled for a specific application (APPLICATION_DIGITAL).
+
+Returns the result as a Mono<Boolean>, indicating an asynchronous or reactive operation.
+
+
+
+
+---
+
+5. Similar Reactive Feature Checks
+
+Mono<Boolean> preToPostWaiveActivationFeeFlagMono = featureFlag.isFeatureEnabled(
+    FeatureFlagConstants.APPLICATION_DIGITAL,
+    FeatureFlagConstants.FLAG_NAME_ACTIVATION_FEE_WAIVER_FFAG,
+    false
+);
+
+Explanation:
+
+Another feature flag check, this time for Activation Fee Waiver.
+
+
+
+
+---
+
+6. Combining Mono Results
+
+return Mono.zip(
+    ngdNonCartFlowFlagMono,
+    fiosMHToggleFlagMono,
+    preToPostWaiveActivationFeeFlagMono,
+    ...
+).flatMap(tuple -> {
+    ...
+});
+
+Explanation:
+
+Mono.zip is a Java 8 Reactive Streams feature that combines multiple Mono values into one.
+
+Here, it waits for all Monos to complete, aggregates their results into a Tuple, and then uses flatMap to process the combined result.
+
+
+
+
+---
+
+7. Mapping Combined Results
+
+Map<String, Boolean> featureFlagsMap = new HashMap<>();
+Boolean ngdNonCartFlowFlag = tuple.getT1();
+Boolean fiosMHToggleFlag = tuple.getT2();
+Boolean preToPostWaiveActivationFeeFlag = tuple.getT3();
+...
+featureFlagsMap.put(FeatureFlagConstants.NGD_PLANS_NON_CART_FLOW, ngdNonCartFlowFlag);
+featureFlagsMap.put(FeatureFlagConstants.FIOS_MH_TOGGLE_FLAG, fiosMHToggleFlag);
+...
+
+Explanation:
+
+A new HashMap is created to store feature flags as key-value pairs.
+
+The Tuple (result of Mono.zip) is used to retrieve individual results with methods like getT1() (Tuple value 1).
+
+Each result is mapped to its corresponding feature flag name using the put() method.
+
+
+
+
+---
+
+8. Cookie Validation
+
+if (StringUtils.isNotEmpty(infoCookie)) {
+    featureFlagsMap.put(FeatureFlagConstants.FLAG_NAME_ACTIVATION_FEE_WAIVER_FFAG, preToPostWaiveActivationFeeFlag);
+}
+
+Explanation:
+
+Checks if the cookie (infoCookie) is non-empty.
+
+If so, adds the Activation Fee Waiver flag to the feature flags map.
+
+
+
+
+---
+
+9. Returning Mono
+
+return Mono.just(featureFlagsMap);
+
+Explanation:
+
+Wraps the final featureFlagsMap in a Mono, ensuring the method's return type (Mono<Map<String, Boolean>>) is fulfilled.
+
+
+
+
+---
+
+Java 8 Features in the Code
+
+1. Streams and Functional Programming:
+
+Mono.zip() utilizes functional-style programming to aggregate multiple asynchronous streams.
+
+Java 8 introduced the functional paradigm, which is heavily used in reactive programming libraries like Reactor.
+
+
+
+2. Lambda Expressions:
+
+The flatMap(tuple -> {...}) lambda expression is a concise way to process the aggregated tuple.
+
+
+
+3. Optional Default Values:
+
+The false passed as a parameter in featureFlag.isFeatureEnabled() provides a default value if the feature flag check fails.
+
+
+
+4. Immutable Collections:
+
+The use of Map<String, Boolean> allows for clean key-value mapping without modifying the original data.
+
+
+
+
+
+---
+
+Let me know if you need a deeper explanation or assistance with specific terms like Mono, Map, or reactive programming!
