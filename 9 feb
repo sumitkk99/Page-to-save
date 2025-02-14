@@ -1,245 +1,31 @@
-Understanding the Code and How Spring Reactive (Mono) is Used
+@Mock
+private FeatureFlagHelper featureFlagHelper;
 
-This code is implementing feature flag handling for a system related to plans and offers (SFOs - Special Feature Offers) using Spring Reactive (Mono). It retrieves feature flags, processes them, and updates plans accordingly. Let’s go step by step:
-
-
----
-
-1. Feature Flag Management Using Spring Reactive (Mono)
-
-Fetching Feature Flags
-
-File: FeatureFlagHelper.java
-
-public Mono<Map<String, Boolean>> fetchFeatureFlags() {
-    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+@Test
+public void updateWinBackCustomerRedisDataTest() {
+    final Map<String, String> sessionData = new HashMap<>();
+    var bpmResponse = jsonToPojo("/data/MockResponseBPM2.json", SalesOrderPurchaseResponse.class);
+    var request = new NewCustomerCaseCreationRequest();
     
-    Mono<Boolean> legacySfosFFlagMono = featureFlag.isFeatureEnabled(
-        FeatureFlagConstants.AWS_CONFIG_APP_NAME,
-        FeatureFlagConstants.SWIFT_CFG_PROFILE,
-        FeatureFlagConstants.LEGACY_SFOS_FFLAG,
-        false
-    );
-
-    return Mono.zip(
-        fwaDuplicatePerkFFlagMono, 
-        availableOffersCarouselFFlagMono, 
-        promoBadgingFFlagMono, 
-        unlimitedCloudPerkModalFFlagMono, 
-        legacySfosFFlagMono
-    ).flatMap(tuple -> {
-        Boolean fwaDuplicatePerkFFlag = tuple.getT1();
-        Boolean availableOffersCarouselFFlag = tuple.getT2();
-        Boolean promoBadgingFFlag = tuple.getT3();
-        Boolean unlimitedCloudPerkModalFFlag = tuple.getT4();
-        Boolean legacySfosFFlag = tuple.getT5();
-
-        featureFlagsMap.put(FeatureFlagConstants.FWA_DUPLICATE_PERK_FFLAG, fwaDuplicatePerkFFlag);
-        featureFlagsMap.put(FeatureFlagConstants.AWS_FLAG_SPECIAL_OFFER, availableOffersCarouselFFlag);
-        featureFlagsMap.put(FeatureFlagConstants.PROMO_BADGING_FFLAG, promoBadgingFFlag);
-        featureFlagsMap.put(FeatureFlagConstants.UNLIMITED_CLOUD_PERK_MODEL_FFLAG, unlimitedCloudPerkModalFFlag);
-        featureFlagsMap.put(FeatureFlagConstants.LEGACY_SFOS_FFLAG, legacySfosFFlag);
-
-        log.info("featureFlagsMap: {}", featureFlagsMap);
-
-        return Mono.just(featureFlagsMap);
-    });
+    // Scenario 1: Feature Flag Disabled (Default Behavior)
+    when(featureFlagHelper.isWinBackFlowFixFFlagEnabled()).thenReturn(false);
+    request.setFlowType("winBack");
+    
+    sessionHelper.updateWinBackCustomerRedisData(bpmResponse, sessionData, request);
+    
+    Assertions.assertThat(sessionData)
+        .isNotEmpty()
+        .containsEntry(AccountLandingSessionKeys.FLOW_TYPE, "winBack")
+        .containsKeys(AccountLandingSessionKeys.CARTID, AccountLandingSessionKeys.CASEID)
+        .doesNotContainEntry(AccountLandingSessionKeys.INTENTTYPE, "EUP");
+    
+    // Scenario 2: Feature Flag Enabled and FlowType = AI_QUOTE
+    sessionData.clear(); // Reset session data
+    when(featureFlagHelper.isWinBackFlowFixFFlagEnabled()).thenReturn(true);
+    request.setFlowType(AccountLandingConstants.AI_QUOTE);
+    
+    sessionHelper.updateWinBackCustomerRedisData(bpmResponse, sessionData, request);
+    
+    Assertions.assertThat(sessionData)
+        .containsEntry(AccountLandingSessionKeys.FLOW_TYPE, AccountLandingConstants.AI_QUOTE);
 }
-
-What’s Happening Here?
-
-Mono<Boolean> legacySfosFFlagMono: Fetches a feature flag value asynchronously.
-
-Mono.zip(...).flatMap(tuple -> { ... }):
-
-Collects multiple feature flag values in parallel using Mono.zip().
-
-Extracts flag values from tuple (e.g., tuple.getT1(), tuple.getT2(), etc.).
-
-Populates the featureFlagsMap with the extracted values.
-
-Returns the map wrapped in a Mono<Map<String, Boolean>>.
-
-
-
-How Spring Reactive (Mono) is Used?
-
-Mono.zip(): Aggregates multiple Mono<Boolean> values into a single Mono<Tuple>.
-
-flatMap(): Extracts values, updates featureFlagsMap, and returns a reactive Mono<Map<String, Boolean>>.
-
-Asynchronous execution: This allows non-blocking retrieval of feature flags.
-
-
-
----
-
-2. Assisted Plan Service - Processing Feature Flags
-
-File: AssistedPlanServiceImpl.java
-
-public class AssistedPlanServiceImpl implements AssistedPlanService {
-    if (CollectionUtilities.isNotEmptyOrNull(availablePlanMobileInfo)) {
-        soeLine.setProfilePerks(planServiceHelper.setProfilePerks(
-            availablePlanMobileInfo.get(0).getCurrentSPOs(),
-            soeData.getPerkReferenceDataList()
-        ));
-
-        if (CollectionUtilities.isNotEmptyOrNull(getPlansRequest.getFeatureFlags()) &&
-            getPlansRequest.getFeatureFlags().containsKey(FeatureFlagConstants.LEGACY_SFOS_FFLAG) &&
-            getPlansRequest.getFeatureFlags().get(FeatureFlagConstants.LEGACY_SFOS_FFLAG)) {
-            
-            String legacySfo = env.getProperty(PlanConstants.LEGACY_SFOS);
-            
-            PlanServiceCommonHelper.setLegacySfos(soeLine, availablePlanMobileInfo, legacySfo);
-        }
-    }
-}
-
-What’s Happening Here?
-
-1. Checking if availablePlanMobileInfo is not empty.
-
-This ensures the data is available before proceeding.
-
-
-
-2. Setting Profile Perks using planServiceHelper.setProfilePerks(...).
-
-
-3. Checking Feature Flags from Request:
-
-If LEGACY_SFOS_FFLAG exists and is true, it proceeds with setLegacySfos().
-
-Reads legacy_sfos from application.properties (PlanConstants.LEGACY_SFOS).
-
-Calls setLegacySfos(...) to update SOE (Service Offer Entity).
-
-
-
-
-
----
-
-3. Utility Class for Feature Flags
-
-File: PlanServiceCommonHelper.java
-
-public static void setFeatureFlagsToSOE(GetPlansRequest getPlansRequest, GetPlansData getPlansData) {
-    Map<String, Boolean> featureFlags = 
-        CollectionUtilities.isNotEmptyOrNull(getPlansRequest.getFeatureFlags()) 
-            ? getPlansRequest.getFeatureFlags() 
-            : new HashMap<>();
-
-    if (featureFlags.containsKey(FeatureFlagConstants.LEGACY_SFOS_FFLAG)) {
-        setFeatureFlagsToSOE(
-            FeatureFlagConstants.LEGACY_SFOS_FFLAG, 
-            featureFlags.get(FeatureFlagConstants.LEGACY_SFOS_FFLAG), 
-            getPlansData
-        );
-    }
-}
-
-What’s Happening Here?
-
-1. Extracts feature flags from getPlansRequest safely.
-
-
-2. Checks if LEGACY_SFOS_FFLAG exists in the feature flags.
-
-
-3. Calls setFeatureFlagsToSOE(...) to apply it to getPlansData.
-
-
-
-
----
-
-Summary of What’s Happening in the Code
-
-Main Purpose
-
-This implementation adds handling for the "legacySfos" feature flag, which determines whether a legacy Special Feature Offer (SFO) should be applied.
-
-
-Spring Reactive (Mono) Usage
-
-Mono<Boolean> is used to fetch feature flags asynchronously.
-
-Mono.zip() collects multiple flags in parallel.
-
-flatMap() processes the flags and stores them in a Map<String, Boolean>.
-
-
-Feature Flag Flow
-
-1. Feature Flags are fetched asynchronously (FeatureFlagHelper.fetchFeatureFlags()).
-
-
-2. Flags are passed to AssistedPlanServiceImpl to decide whether to apply LEGACY_SFOS_FFLAG.
-
-
-3. If enabled, the system applies legacy SFO changes (PlanServiceCommonHelper.setLegacySfos()).
-
-
-
-Why Spring Reactive?
-
-Non-blocking execution: Fetching feature flags doesn't block the main thread.
-
-Performance improvement: Parallel fetching of multiple feature flags.
-
-Scalability: Works well in microservices architecture.
-
-
-
----
-
-How to Apply This Knowledge to Other Projects?
-
-When adding a new feature flag:
-
-1. Define it in FeatureFlagConstants.
-
-
-2. Fetch it using a Mono<Boolean> in a helper class.
-
-
-3. Process it using Mono.zip() if multiple flags are needed together.
-
-
-4. Use it in services to modify business logic.
-
-
-5. Ensure it is safely checked before applying changes.
-
-
-
-When working with Spring Reactive (Mono):
-
-Use Mono for single values (e.g., Mono<Boolean>).
-
-Use Mono.zip() when combining multiple Mono values.
-
-Always use flatMap() for processing values reactively.
-
-
-
-
----
-
-Final Thoughts
-
-This code is a good example of reactive programming using Spring Boot. The Mono usage ensures non-blocking feature flag fetching, which improves efficiency in high-traffic environments like microservices. If you need to work on similar features in another project, follow the same approach:
-
-1. Fetch feature flags reactively.
-
-
-2. Use Mono.zip() for multiple flags.
-
-
-3. Apply flags in service classes only when necessary.
-
-
-
-Let me know if you want any deeper explanations!
