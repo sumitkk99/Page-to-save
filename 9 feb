@@ -1,31 +1,19 @@
-@Mock
-private FeatureFlagHelper featureFlagHelper;
-
-@Test
-public void updateWinBackCustomerRedisDataTest() {
-    final Map<String, String> sessionData = new HashMap<>();
-    var bpmResponse = jsonToPojo("/data/MockResponseBPM2.json", SalesOrderPurchaseResponse.class);
-    var request = new NewCustomerCaseCreationRequest();
-    
-    // Scenario 1: Feature Flag Disabled (Default Behavior)
-    when(featureFlagHelper.isWinBackFlowFixFFlagEnabled()).thenReturn(false);
-    request.setFlowType("winBack");
-    
-    sessionHelper.updateWinBackCustomerRedisData(bpmResponse, sessionData, request);
-    
-    Assertions.assertThat(sessionData)
-        .isNotEmpty()
-        .containsEntry(AccountLandingSessionKeys.FLOW_TYPE, "winBack")
-        .containsKeys(AccountLandingSessionKeys.CARTID, AccountLandingSessionKeys.CASEID)
-        .doesNotContainEntry(AccountLandingSessionKeys.INTENTTYPE, "EUP");
-    
-    // Scenario 2: Feature Flag Enabled and FlowType = AI_QUOTE
-    sessionData.clear(); // Reset session data
-    when(featureFlagHelper.isWinBackFlowFixFFlagEnabled()).thenReturn(true);
-    request.setFlowType(AccountLandingConstants.AI_QUOTE);
-    
-    sessionHelper.updateWinBackCustomerRedisData(bpmResponse, sessionData, request);
-    
-    Assertions.assertThat(sessionData)
-        .containsEntry(AccountLandingSessionKeys.FLOW_TYPE, AccountLandingConstants.AI_QUOTE);
+{
+  "item": "GLOBAL CALLING",
+  "price": "10.00",
+  "hasNextMonthPromoDiscount": true,
+  "hasThisMonthPromoDiscount": true,
+  "chargeRefId": "80167",
+  "additionalParameters": [
+    {
+      "promoId": "18567",
+      "promoDesc": "50% FEATURE DISCOUNT",
+      "promoDiscount": "-2.50"
+    },
+    {
+      "promoId": "18600",
+      "promoDesc": "10% FEATURE DISCOUNT",
+      "promoDiscount": "-1.00"
+    }
+  ]
 }
