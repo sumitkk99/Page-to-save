@@ -1,19 +1,20 @@
-{
-  "item": "GLOBAL CALLING",
-  "price": "10.00",
-  "hasNextMonthPromoDiscount": true,
-  "hasThisMonthPromoDiscount": true,
-  "chargeRefId": "80167",
-  "additionalParameters": [
-    {
-      "promoId": "18567",
-      "promoDesc": "50% FEATURE DISCOUNT",
-      "promoDiscount": "-2.50"
-    },
-    {
-      "promoId": "18600",
-      "promoDesc": "10% FEATURE DISCOUNT",
-      "promoDiscount": "-1.00"
+private static void setPromosToPerks(ChargeDetails accMonthlyChrgs, boolean isPromoOrderFFlagEnabled, AddOnsChargesDetail dueMonthlyAddon) {
+    if (isPromoOrderFFlagEnabled) {
+        List<AdditionalParameters> addParams = Stream.of(
+                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo1Id(), accMonthlyChrgs.getPromo1Discount(), accMonthlyChrgs.getPromo1Desc()),
+                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo2Id(), accMonthlyChrgs.getPromo2Discount(), accMonthlyChrgs.getPromo2Desc()),
+                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo3Id(), accMonthlyChrgs.getPromo3Discount(), accMonthlyChrgs.getPromo3Desc())
+        )
+        .filter(entry -> StringUtilities.isNotEmptyOrNull(entry.getValue()))
+        .map(entry -> {
+            AdditionalParameters promo = new AdditionalParameters();
+            promo.setPromoId(entry.getKey());
+            promo.setPromoDiscount(entry.getValue());
+            promo.setPromoDesc(entry.getDescription());
+            return promo;
+        })
+        .collect(Collectors.toList());
+
+        dueMonthlyAddon.setAdditionalParameters(addParams);
     }
-  ]
 }
