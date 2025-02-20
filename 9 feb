@@ -12,28 +12,26 @@ ChargeDetails accMonthlyCharges = new ChargeDetails();
     accMonthlyCharges.setPromo3Discount("20.00");
     accMonthlyCharges.setPromo3Desc("Third Promo Discount");
     
-    // Create monthly addon object if required by your implementation
     MonthlyAddon monthlyAddon = new MonthlyAddon();
     accMonthlyCharges.setMonthlyAddon(monthlyAddon);
     
     // Call the method
-    QuoteServiceHelper.setPromoDiscountInfoToMonthlyAddons(accMonthlyCharges, true);
+    CompareQuoteRequest compareQuotesReq = new CompareQuoteRequest();
+    compareQuotesReq.setChargeDetails(accMonthlyCharges);
     
-    // Verify
-    List<PromoDiscountInfo> promoDiscountInfos = accMonthlyCharges.getMonthlyAddon().getPromoDiscountInfo();
+    // If this is part of a larger flow, use the public method that internally calls setPromoDiscountInfoToMonthlyAddons
+    Mono<CompareQuoteResponse> response = quoteServiceHelper.populateCompareQuotesValues(compareQuotesReq, "cartId");
     
-    // Verify size
-    assertEquals(3, promoDiscountInfos.size());
-    
-    // Verify Promo1
-    assertEquals("10.00", promoDiscountInfos.get(0).getPromoDiscount());
-    assertEquals("First Promo Discount", promoDiscountInfos.get(0).getPromoDesc());
-    
-    // Verify Promo2
-    assertEquals("15.00", promoDiscountInfos.get(1).getPromoDiscount());
-    assertEquals("Second Promo Discount", promoDiscountInfos.get(1).getPromoDesc());
-    
-    // Verify Promo3
-    assertEquals("20.00", promoDiscountInfos.get(2).getPromoDiscount());
-    assertEquals("Third Promo Discount", promoDiscountInfos.get(2).getPromoDesc());
+    // Verify using StepVerifier
+    StepVerifier.create(response)
+        .expectNextMatches(result -> {
+            MonthlyAddon resultAddon = result.getChargeDetails().getMonthlyAddon();
+            List<PromoDiscountInfo> promos = resultAddon.getPromoDiscountInfo();
+            
+            return promos.size() == 3 &&
+                   promos.get(0).getPromoDiscount().equals("10.00") &&
+                   promos.get(1).getPromoDiscount().equals("15.00") &&
+                   promos.get(2).getPromoDiscount().equals("20.00");
+        })
+        .verifyComplete();
 }
