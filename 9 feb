@@ -1,20 +1,39 @@
-private static void setPromosToPerks(ChargeDetails accMonthlyChrgs, boolean isPromoOrderFFlagEnabled, AddOnsChargesDetail dueMonthlyAddon) {
-    if (isPromoOrderFFlagEnabled) {
-        List<AdditionalParameters> addParams = Stream.of(
-                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo1Id(), accMonthlyChrgs.getPromo1Discount(), accMonthlyChrgs.getPromo1Desc()),
-                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo2Id(), accMonthlyChrgs.getPromo2Discount(), accMonthlyChrgs.getPromo2Desc()),
-                new AbstractMap.SimpleEntry<>(accMonthlyChrgs.getPromo3Id(), accMonthlyChrgs.getPromo3Discount(), accMonthlyChrgs.getPromo3Desc())
-        )
-        .filter(entry -> StringUtilities.isNotEmptyOrNull(entry.getValue()))
-        .map(entry -> {
-            AdditionalParameters promo = new AdditionalParameters();
-            promo.setPromoId(entry.getKey());
-            promo.setPromoDiscount(entry.getValue());
-            promo.setPromoDesc(entry.getDescription());
-            return promo;
-        })
-        .collect(Collectors.toList());
-
-        dueMonthlyAddon.setAdditionalParameters(addParams);
-    }
+ChargeDetails accMonthlyCharges = new ChargeDetails();
+    
+    // Set Promo1 values
+    accMonthlyCharges.setPromo1Discount("10.00");
+    accMonthlyCharges.setPromo1Desc("First Promo Discount");
+    
+    // Set Promo2 values
+    accMonthlyCharges.setPromo2Discount("15.00");
+    accMonthlyCharges.setPromo2Desc("Second Promo Discount");
+    
+    // Set Promo3 values
+    accMonthlyCharges.setPromo3Discount("20.00");
+    accMonthlyCharges.setPromo3Desc("Third Promo Discount");
+    
+    // Create monthly addon object if required by your implementation
+    MonthlyAddon monthlyAddon = new MonthlyAddon();
+    accMonthlyCharges.setMonthlyAddon(monthlyAddon);
+    
+    // Call the method
+    QuoteServiceHelper.setPromoDiscountInfoToMonthlyAddons(accMonthlyCharges, true);
+    
+    // Verify
+    List<PromoDiscountInfo> promoDiscountInfos = accMonthlyCharges.getMonthlyAddon().getPromoDiscountInfo();
+    
+    // Verify size
+    assertEquals(3, promoDiscountInfos.size());
+    
+    // Verify Promo1
+    assertEquals("10.00", promoDiscountInfos.get(0).getPromoDiscount());
+    assertEquals("First Promo Discount", promoDiscountInfos.get(0).getPromoDesc());
+    
+    // Verify Promo2
+    assertEquals("15.00", promoDiscountInfos.get(1).getPromoDiscount());
+    assertEquals("Second Promo Discount", promoDiscountInfos.get(1).getPromoDesc());
+    
+    // Verify Promo3
+    assertEquals("20.00", promoDiscountInfos.get(2).getPromoDiscount());
+    assertEquals("Third Promo Discount", promoDiscountInfos.get(2).getPromoDesc());
 }
