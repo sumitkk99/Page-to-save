@@ -1,58 +1,121 @@
-@Test
-void testSetPromoDiscountInfoToMonthlyAddons_Promo1DescNull() {
-    // Arrange
-    ChargeDetails accMonthlyChrgs = new ChargeDetails();
-    accMonthlyChrgs.setPromo1Discount("10%");
-    accMonthlyChrgs.setPromo1Desc(null);  // Promo1Desc is null
+Yes, you can definitely refactor both conditions into a single method to avoid code duplication and improve maintainability. Here’s how you can do it:
 
-    AddOnsChanrgesDetail monthlyAddon = new AddOnsChanrgesDetail();
-    boolean isPromoOrderFFlagEnabled = true;
 
-    // Act
-    setPromoDiscountInfoToMonthlyAddons(accMonthlyChrgs, isPromoOrderFFlagEnabled, monthlyAddon);
+---
 
-    // Assert
-    assertNull(monthlyAddon.getPromoDiscountInfo());  // No promo should be added
+Refactored Approach
+
+You can create a utility method that handles promo details and returns a list of AddOnsChanrgesDetail or MonthlyChargesDetail.
+
+Refactored Method
+
+private <T> void processPromoDetails(
+        boolean featureFlagEnabled,
+        MtnCharge mtnCharge,
+        List<T> dueMonthlyList,
+        List<T> nextMonthlyList,
+        Function<T> instanceSupplier
+) {
+    if (!featureFlagEnabled) {
+        return;
+    }
+
+    processSinglePromo(mtnCharge.getPromolDiscount(), mtnCharge.getPromolDesc(), 
+        mtnCharge.isHasNextMonthPromoDiscount(), mtnCharge.isHasThisMonthPromoDiscount(),
+        mtnCharge.getPromo1EndDate(), dueMonthlyList, nextMonthlyList, instanceSupplier);
+    
+    processSinglePromo(mtnCharge.getPromo2Discount(), mtnCharge.getPromo2Desc(), 
+        mtnCharge.isHasNextMonthPromoDiscount(), mtnCharge.isHasThisMonthPromoDiscount(),
+        mtnCharge.getPromo2EndDate(), dueMonthlyList, nextMonthlyList, instanceSupplier);
+
+    processSinglePromo(mtnCharge.getPromo3Discount(), mtnCharge.getPromo3Desc(), 
+        mtnCharge.isHasNextMonthPromoDiscount(), mtnCharge.isHasThisMonthPromoDiscount(),
+        mtnCharge.getPromo3EndDate(), dueMonthlyList, nextMonthlyList, instanceSupplier);
+}
+
+private <T> void processSinglePromo(
+        String discount,
+        String desc,
+        boolean hasNextMonthPromo,
+        boolean hasThisMonthPromo,
+        String promoEndDate,
+        List<T> dueMonthlyList,
+        List<T> nextMonthlyList,
+        Function<T> instanceSupplier
+) {
+    if (StringUtilities.isNotEmptyOrNull(discount) && StringUtilities.isNotEmptyOrNull(desc)) {
+        BigDecimal promoValue = new BigDecimal(discount);
+        if (promoValue.compareTo(BigDecimal.ZERO) != 0) {
+            T dueMonthlyPromo = instanceSupplier.apply();
+            setPromoDetails(dueMonthlyPromo, desc, discount, hasNextMonthPromo, hasThisMonthPromo, promoEndDate);
+            dueMonthlyList.add(dueMonthlyPromo);
+
+            T nextMonthlyPromo = instanceSupplier.apply();
+            setPromoDetails(nextMonthlyPromo, desc, discount, hasNextMonthPromo, hasThisMonthPromo, promoEndDate);
+            nextMonthlyList.add(nextMonthlyPromo);
+        }
+    }
+}
+
+private <T> void setPromoDetails(T promo, String desc, String discount, boolean hasNextMonthPromo, boolean hasThisMonthPromo, String promoEndDate) {
+    if (promo instanceof AddOnsChanrgesDetail) {
+        AddOnsChanrgesDetail details = (AddOnsChanrgesDetail) promo;
+        details.setItem(desc);
+        details.setPrice(discount);
+        details.setHasNextMonthPromoDiscount(hasNextMonthPromo);
+        details.setHasThisMonthPromoDiscount(hasThisMonthPromo);
+        details.setPromoEndDate(promoEndDate);
+    } else if (promo instanceof MonthlyChargesDetail) {
+        MonthlyChargesDetail details = (MonthlyChargesDetail) promo;
+        details.setItem(desc);
+        details.setPrice(discount);
+        details.setHasNextMonthPromoDiscount(hasNextMonthPromo);
+        details.setHasThisMonthPromoDiscount(hasThisMonthPromo);
+        details.setPromoEndDate(promoEndDate);
+    }
 }
 
 
+---
 
-@Test
-void testSetPromoDiscountInfoToMonthlyAddons_Promo2DescEmpty() {
-    // Arrange
-    ChargeDetails accMonthlyChrgs = new ChargeDetails();
-    accMonthlyChrgs.setPromo2Discount("15%");
-    accMonthlyChrgs.setPromo2Desc("");  // Promo2Desc is empty
+How to Call This Method?
 
-    AddOnsChanrgesDetail monthlyAddon = new AddOnsChanrgesDetail();
-    boolean isPromoOrderFFlagEnabled = true;
+For AddOnsChanrgesDetail List
 
-    // Act
-    setPromoDiscountInfoToMonthlyAddons(accMonthlyChrgs, isPromoOrderFFlagEnabled, monthlyAddon);
+processPromoDetails(
+    lisPromoOrderFFlagEnabled,
+    mtnCharge,
+    dueMonthlyMtnAddOnChargeDetails,
+    nextMonthlyMtnAddOnChargeDetails,
+    AddOnsChanrgesDetail::new
+);
 
-    // Assert
-    assertNull(monthlyAddon.getPromoDiscountInfo());  // No promo should be added
-}
+For MonthlyChargesDetail List
 
-
-
-
-@Test
-void testSetPromoDiscountInfoToMonthlyAddons_Promo3DescNull() {
-    // Arrange
-    ChargeDetails accMonthlyChrgs = new ChargeDetails();
-    accMonthlyChrgs.setPromo3Discount("20%");
-    accMonthlyChrgs.setPromo3Desc(null);  // Promo3Desc is null
-
-    AddOnsChanrgesDetail monthlyAddon = new AddOnsChanrgesDetail();
-    boolean isPromoOrderFFlagEnabled = true;
-
-    // Act
-    setPromoDiscountInfoToMonthlyAddons(accMonthlyChrgs, isPromoOrderFFlagEnabled, monthlyAddon);
-
-    // Assert
-    assertNull(monthlyAddon.getPromoDiscountInfo());  // No promo should be added
-}
+processPromoDetails(
+    lisPromoOrderFFlagEnabled,
+    mtnCharge,
+    dueMonthlyMtnMonthlyChargesDetails,
+    nextMonthlyMtnMonthlyChargesDetails,
+    MonthlyChargesDetail::new
+);
 
 
+---
 
+Benefits of This Refactor
+
+1. Removes Code Duplication → The promo logic is now handled in a single reusable method.
+
+
+2. Better Readability → The new method is self-contained and modular.
+
+
+3. Easier to Maintain → If promo logic changes, you only update it in one place.
+
+
+4. More Scalable → If more promo fields are added, you just extend the helper methods.
+
+
+
+Let me know if you need further modifications!
