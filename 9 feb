@@ -1,4 +1,58 @@
-QuoteService quoteService = new QuoteService();
+Test
+public void testCompareQuotes() throws IOException {
+    // Setup test data
+    List<CompareQuoteResponse> compareQuoteResponsesList = new ArrayList<>();
+    CompareQuoteRequest compareQuoteRequest = new CompareQuoteRequest();
+    QuoteTimer timer = new QuoteTimer();
+    SOEError sOEError = new SOEError();
+    DueMonthly dueMonthly = new DueMonthly();
+    DueToday dueToday = new DueToday();
+    List<SOEError> metrics = new ArrayList<>();
+    
+    sOEError.setMessage("Error Msg");
+    metrics.add(sOEError);
+    
+    dueMonthly.setDueMonthlyChargesTotal("12");
+    dueToday.setDueTodayChargesTotal("100");
+    
+    // Set up the CompareQuoteRequest with required values
+    compareQuoteRequest.setFullAccNumber("A");
+    compareQuoteRequest.setCart1("cart1");
+    compareQuoteRequest.setCart2("cart2");
+    compareQuoteRequest.setCart3("cart3");
+    
+    // Create the current quote response
+    CompareQuoteResponse current = new CompareQuoteResponse();
+    current.setMetrics(metrics);
+    current.setQuoteLabel("Current");
+    compareQuoteResponsesList.add(current);
+    
+    // Create the quote1 response
+    CompareQuoteResponse quote1 = new CompareQuoteResponse();
+    quote1.setMetrics(metrics);
+    quote1.setDueMonthly(dueMonthly);
+    quote1.setDueToday(dueToday);
+    quote1.setQuoteLabel("Quote 1");
+    compareQuoteResponsesList.add(quote1);
+    
+    // Create the quote2 response
+    CompareQuoteResponse quote2 = new CompareQuoteResponse();
+    quote2.setMetrics(metrics);
+    quote2.setDueMonthly(dueMonthly);
+    quote2.setDueToday(dueToday);
+    quote2.setQuoteLabel("Quote 2");
+    compareQuoteResponsesList.add(quote2);
+    
+    // Create the quote3 response
+    CompareQuoteResponse quote3 = new CompareQuoteResponse();
+    quote3.setMetrics(metrics);
+    quote3.setDueMonthly(dueMonthly);
+    quote3.setDueToday(dueToday);
+    quote3.setQuoteLabel("Quote 3");
+    compareQuoteResponsesList.add(quote3);
+    
+    // Initialize the quoteService
+    QuoteService quoteService = new QuoteService();
     
     // Mock any dependencies that quoteService might have
     QuoteServiceHelper quoteServiceHelper = Mockito.mock(QuoteServiceHelper.class);
