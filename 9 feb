@@ -1,18 +1,63 @@
-@Test
-public void fetchFeatureFlagsWithNullPromoOrderFlag() {
-    // Mock the feature flag to return null for promoOrderFFlag
-    when(featureFlag.isFeatureEnabled(
-        eq(FeatureFlagConstants.MARKETING_APP_NAME),
-        eq(FeatureFlagConstants.SWIFT_CFG_PROFILE),
-        eq(FeatureFlagConstants.PROMO_ORDER_FLAG),
-        eq(Boolean.FALSE)
-    )).thenReturn(null);
+QuoteService quoteService = new QuoteService();
     
-    // Call the method
-    StepVerifier.create(featureFlagHelper.fetchFeatureFlags())
-        .assertNext(data -> assertThat(data).isNotNull())
-        .expectComplete()
-        .verify();
-    // You may want to add more specific assertions here to verify
-    // that the map contains the expected default value
+    // Mock any dependencies that quoteService might have
+    QuoteServiceHelper quoteServiceHelper = Mockito.mock(QuoteServiceHelper.class);
+    FeatureFlagHelper featureFlagHelper = Mockito.mock(FeatureFlagHelper.class);
+    QuoteServiceProperties quoteServiceProperties = Mockito.mock(QuoteServiceProperties.class);
+    
+    // Set up the mocks
+    Mockito.when(quoteServiceProperties.getEnableResponseMock()).thenReturn(true);
+    
+    // Set mocked objects into quoteService using reflection or constructor
+    // This part depends on how quoteService is implemented
+    // For example: 
+    // ReflectionTestUtils.setField(quoteService, "quoteServiceHelper", quoteServiceHelper);
+    // ReflectionTestUtils.setField(quoteService, "featureFlagHelper", featureFlagHelper);
+    // ReflectionTestUtils.setField(quoteService, "quoteServiceProperties", quoteServiceProperties);
+    
+    // Setup mocks for the populateCompareQuotesValues method
+    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, null))
+           .thenReturn(Mono.just(current));
+    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart1()))
+           .thenReturn(Mono.just(quote1));
+    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart2()))
+           .thenReturn(Mono.just(quote2));
+    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart3()))
+           .thenReturn(Mono.just(quote3));
+    
+    // Mock feature flag
+    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+    featureFlagsMap.put("someFeature", true);
+    Mockito.when(featureFlagHelper.getFeatureFlagsWithThrottle(Mockito.anyString()))
+           .thenReturn(Mono.just(featureFlagsMap));
+    
+    // Call the method under test
+    Mono<CompareQuotesResponse> compareQuotesRespMono = quoteService.mergeCompareQuotes(
+            Mono.just(current),
+            Mono.just(quote1),
+            Mono.just(quote2),
+            Mono.just(quote3),
+            timer,
+            compareQuoteRequest
+    );
+    
+    // Assert the result
+    StepVerifier.create(compareQuotesRespMono)
+                .expectNextMatches(response -> {
+                    List<CompareQuoteResponse> responses = response.getCompareQuoteResponses();
+                    return responses.size() == 4 &&
+                           responses.get(0).getQuoteLabel().equals("Current") &&
+                           responses.get(1).getQuoteLabel().equals("Quote 1") &&
+                           responses.get(2).getQuoteLabel().equals("Quote 2") &&
+                           responses.get(3).getQuoteLabel().equals("Quote 3");
+                })
+                .verifyComplete();
+    
+    // Test the compareQuotes method
+    Mono<CompareQuotesResponse> cqpResponse = quoteService.compareQuotes(compareQuoteRequest);
+    
+    // Verify the result
+    StepVerifier.create(cqpResponse)
+                .expectNext(Mockito.any(CompareQuotesResponse.class))
+                .verifyComplete();
 }
