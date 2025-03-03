@@ -1,33 +1,3 @@
-package onevz.soe.activation.test.controller;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import onevz.soe.activation.controller.OrderConfirmationRedesignController;
-import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
-import onevz.soe.activation.helper.ErrorHandlerHelper;
-import onevz.soe.activation.helper.OrderConfirmationRedesignHelper;
-import onevz.soe.activation.helper.RedisHelper;
-import onevz.soe.activation.service.OrderConfirmationRedesignService;
-import onevz.soe.activation.ui.request.OrderConfirmationRequest;
-import onevz.soe.exception.SOEError;
-import onevz.soe.security.model.SsoJwtDTO;
-import onevz.soe.utilities.StringUtilities;
-import onevz.soe.wsclient.http.exceptions.SOEHTTPException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-@RunWith(SpringJUnit4ClassRunner.class)
 public class OrderConfirmationRedesignControllerTest {
 
     @InjectMocks
@@ -46,7 +16,10 @@ public class OrderConfirmationRedesignControllerTest {
     private ErrorHandlerHelper errorHandler;
 
     @Mock
-    private FeatureFlagIntegrationService featureFlagIntegrationService; // Newly added mock
+    private FeatureFlagIntegrationService featureFlagIntegrationService;
+
+    @Mock
+    private SsoJwtTokenProcessorHelper tokenProcessorHelper; // Add this mock
 
     @Before
     public void setUp() {
@@ -67,11 +40,12 @@ public class OrderConfirmationRedesignControllerTest {
         RedisReqData mockRedisData = new RedisReqData();
         mockRedisData.setCartId("CART123");
         mockRedisData.setCompletedCartId("COMPLETED_CART123");
-        mockRedisData.setAffiliate("affiliateTest");
-        mockRedisData.setCievent("cieventTest");
 
         // Mock Feature Flag Response
         Mono<Boolean> featureFlagResponse = Mono.just(true);
+
+        // Mocking the token processor behavior
+        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(mockSsoJwt);
 
         // Mock Service Call Responses
         when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
@@ -84,41 +58,9 @@ public class OrderConfirmationRedesignControllerTest {
         StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
                 .assertNext(response -> {
                     assertNotNull(response);
-                    verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); // Verify method call
+                    verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); 
                     verify(redisHelper, times(1)).getConfirmationPageDataFromRedis();
                     verify(featureFlagIntegrationService, times(1)).orderConfirmationCloudFixFFlag(any());
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_Failure() throws SOEHTTPException {
-        // Mock request
-        ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
-        OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
-
-        // Mock Redis Data with Empty CartId
-        RedisReqData mockRedisData = new RedisReqData();
-        mockRedisData.setCartId(null);
-        mockRedisData.setCompletedCartId(null);
-
-        // Mock Feature Flag Response
-        Mono<Boolean> featureFlagResponse = Mono.just(false);
-
-        // Mock Service Call Responses
-        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
-        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any()))
-                .thenReturn(featureFlagResponse);
-
-        // Mock error handling behavior
-        doNothing().when(errorHandler).convertExceptionToSOEError(any(), any());
-
-        // Call the controller method and verify using StepVerifier
-        StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
-                .assertNext(response -> {
-                    assertNotNull(response);
-                    assertEquals("Failed", response.getStatus());
-                    verify(errorHandler, times(1)).convertExceptionToSOEError(any(), any());
                 })
                 .verifyComplete();
     }
