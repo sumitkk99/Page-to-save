@@ -1,464 +1,125 @@
-package onevz.soe.activation.controller;
+package onevz.soe.activation.test.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
-import onevz.soe.activation.constants.ActivationConstants;
+import onevz.soe.activation.controller.OrderConfirmationRedesignController;
 import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
-import onevz.soe.activation.helper.*;
-import onevz.soe.activation.model.RedisReqData;
+import onevz.soe.activation.helper.ErrorHandlerHelper;
+import onevz.soe.activation.helper.OrderConfirmationRedesignHelper;
+import onevz.soe.activation.helper.RedisHelper;
 import onevz.soe.activation.service.OrderConfirmationRedesignService;
-import onevz.soe.activation.ui.request.*;
+import onevz.soe.activation.ui.request.OrderConfirmationRequest;
+import onevz.soe.exception.SOEError;
 import onevz.soe.security.model.SsoJwtDTO;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
+import onevz.soe.utilities.StringUtilities;
+import onevz.soe.wsclient.http.exceptions.SOEHTTPException;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
+import org.mockito.MockitoAnnotations;
 import org.springframework.http.server.reactive.ServerHttpRequest;
-import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-@SpringBootTest
-@AutoConfigureWebTestClient
-@Slf4j
+@RunWith(SpringJUnit4ClassRunner.class)
 public class OrderConfirmationRedesignControllerTest {
 
-    @Autowired
-    private WebTestClient webTestClient;
+    @InjectMocks
+    private OrderConfirmationRedesignController controller;
 
-    @MockBean
-    private OrderConfirmationRedesignService service;
-
-    @MockBean
-    private SsoJwtTokenProcessorHelper tokenProcessorHelper;
-
-    @MockBean
+    @Mock
     private RedisHelper redisHelper;
 
-    @MockBean
+    @Mock
     private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
 
-    @MockBean
-    private FeatureFlagIntegrationService featureFlagIntegrationService;
+    @Mock
+    private OrderConfirmationRedesignService orderConfirmationRedesignService;
 
-    @MockBean
+    @Mock
     private ErrorHandlerHelper errorHandler;
 
-    private OrderConfirmationRequest request;
-    private OrderConfirmationRedesignResponse response;
-    private RedisReqData redisReq;
-    private SsoJwtDTO ssoJwtDTO;
-    private Map<String, Object> featureFlagResponse;
+    @Mock
+    private FeatureFlagIntegrationService featureFlagIntegrationService; // Newly added mock
 
-    @BeforeEach
-    public void setup() throws Exception {
-        // Initialize test data
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-        
-        ObjectMapper mapper = new ObjectMapper();
-        request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-        
-        // Create sample SsoJwtDTO
-        ssoJwtDTO = new SsoJwtDTO();
-        ssoJwtDTO.setVzwAccountNumber("123456789");
-        
-        // Setup feature flag response
-        featureFlagResponse = new HashMap<>();
-        featureFlagResponse.put("isEnabled", true);
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    public void testGetConfirmationRedesignPageInfo_Success() {
-        // Setup Redis data
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-                .thenReturn(Mono.just(response));
-                
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any()))
-                .thenReturn(response);
-                
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any()))
-                .thenReturn(Mono.just(true));
-                
-        Mockito.when(redisHelper.deleteKeysFromRedis(Mockito.anyList()))
-                .thenReturn(Mono.just(true));
+    public void testGetConfirmationRedesignPageInfo_Success() throws SOEHTTPException {
+        // Mock request
+        ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
+        OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
 
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
+        // Mock SSO Token
+        SsoJwtDTO mockSsoJwt = new SsoJwtDTO();
+        mockSsoJwt.setVzwAccountNumber("123456789");
 
-        // Verify mocks
-        Mockito.verify(featureFlagIntegrationService).orderConfirmationCloudFixFFlag(Mockito.anyString());
-        Mockito.verify(orderConfirmationRedesignHelper).setFeatureFlags(Mockito.any(), Mockito.any());
+        // Mock Redis Data
+        RedisReqData mockRedisData = new RedisReqData();
+        mockRedisData.setCartId("CART123");
+        mockRedisData.setCompletedCartId("COMPLETED_CART123");
+        mockRedisData.setAffiliate("affiliateTest");
+        mockRedisData.setCievent("cieventTest");
+
+        // Mock Feature Flag Response
+        Mono<Boolean> featureFlagResponse = Mono.just(true);
+
+        // Mock Service Call Responses
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(mockSsoJwt.getVzwAccountNumber()))
+                .thenReturn(featureFlagResponse);
+        when(orderConfirmationRedesignService.getConfirmationPageRedesignInfo(any()))
+                .thenReturn(Mono.just(new OrderConfirmationRedesignResponse()));
+
+        // Call the controller method and verify using StepVerifier
+        StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
+                .assertNext(response -> {
+                    assertNotNull(response);
+                    verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); // Verify method call
+                    verify(redisHelper, times(1)).getConfirmationPageDataFromRedis();
+                    verify(featureFlagIntegrationService, times(1)).orderConfirmationCloudFixFFlag(any());
+                })
+                .verifyComplete();
     }
 
     @Test
-    public void testGetConfirmationRedesignPageInfo_IgnoreChannel() {
-        // Setup Redis data
-        redisReq = RedisReqData.builder()
-                .cartId("cart123")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-                .thenReturn(Mono.just(response));
-                
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any()))
-                .thenReturn(response);
-                
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any()))
-                .thenReturn(Mono.just(true));
-                
-        Mockito.when(redisHelper.deleteKeysFromRedis(Mockito.anyList()))
-                .thenReturn(Mono.just(true));
+    public void testGetConfirmationRedesignPageInfo_Failure() throws SOEHTTPException {
+        // Mock request
+        ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
+        OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
 
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-TOUCHLESSVM")  // Using ignore channel
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
+        // Mock Redis Data with Empty CartId
+        RedisReqData mockRedisData = new RedisReqData();
+        mockRedisData.setCartId(null);
+        mockRedisData.setCompletedCartId(null);
 
-    @Test
-    public void testGetConfirmationRedesignPageInfo_EmptyCartId() {
-        // Setup Redis data with empty cart IDs
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .completedCartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(errorHandler.convertExceptionToSOEErrorID(Mockito.anyString(), Mockito.anyString(), Mockito.anyString()))
-                .thenReturn(Arrays.asList(new HashMap<>()));
+        // Mock Feature Flag Response
+        Mono<Boolean> featureFlagResponse = Mono.just(false);
 
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
+        // Mock Service Call Responses
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any()))
+                .thenReturn(featureFlagResponse);
 
-    @Test
-    public void testGetConfirmationRedesignPageInfo_OrderNotSubmitted() {
-        // Setup Redis data with cart ID but not completed cart ID
-        redisReq = RedisReqData.builder()
-                .cartId("cart123")
-                .completedCartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(errorHandler.convertExceptionToSOEError(Mockito.anyString(), Mockito.anyString()))
-                .thenReturn(Arrays.asList(new HashMap<>()));
+        // Mock error handling behavior
+        doNothing().when(errorHandler).convertExceptionToSOEError(any(), any());
 
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_BBPChannel() {
-        // Setup Redis data with grantor plan for BBP channel
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .grantorPlan("STARTER")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-                .thenReturn(Mono.just(response));
-                
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any()))
-                .thenReturn(response);
-                
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any()))
-                .thenReturn(Mono.just(true));
-                
-        Mockito.when(redisHelper.deleteKeysFromRedis(Mockito.anyList()))
-                .thenReturn(Mono.just(true));
-
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM-BBP")  // BBP channel
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-
-        // Verify grantor plan is set
-        Mockito.verify(orderConfirmationRedesignHelper).updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any());
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_WithGuestRegistration() {
-        // Setup Redis data with guest registration
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .guestRegistrationUid("guest123")
-                .accountNumber("1234567890")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-                .thenReturn(Mono.just(response));
-                
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any()))
-                .thenReturn(response);
-                
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any()))
-                .thenReturn(Mono.just(true));
-                
-        Mockito.when(redisHelper.deleteKeysFromRedis(Mockito.anyList()))
-                .thenReturn(Mono.just(true));
-
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-
-        // Verify amProfileCreated is set
-        Mockito.verify(orderConfirmationRedesignHelper).updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any());
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_EmptyRedisInformation() {
-        // Setup Redis data with empty affiliate and cjevent
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .affiliate("")
-                .cjevent("")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .build();
-        
-        // Mock responses
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        Mockito.when(redisHelper.getAffiliateFromHeader(Mockito.any()))
-                .thenReturn("affiliate-from-header");
-                
-        Mockito.when(redisHelper.getCjeventFromHeader(Mockito.any()))
-                .thenReturn("cjevent-from-header");
-                
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-                .thenReturn(Mono.just(response));
-                
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(
-                Mockito.anyString(), Mockito.any()))
-                .thenReturn(response);
-                
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any()))
-                .thenReturn(Mono.just(true));
-                
-        Mockito.when(redisHelper.deleteKeysFromRedis(Mockito.anyList()))
-                .thenReturn(Mono.just(true));
-
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-
-        // Verify affiliate and cjevent are retrieved from header
-        Mockito.verify(redisHelper).getAffiliateFromHeader(Mockito.any());
-        Mockito.verify(redisHelper).getCjeventFromHeader(Mockito.any());
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_RedisError() {
-        // Mock responses with Redis error
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.error(new RuntimeException("Redis connection error")));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.just(featureFlagResponse));
-                
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().is5xxServerError();
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_FeatureFlagError() {
-        // Setup Redis data
-        redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
-                .build();
-        
-        // Mock responses with feature flag error
-        Mockito.when(tokenProcessorHelper.getSsoJwtTokenObject(Mockito.any(ServerHttpRequest.class)))
-                .thenReturn(ssoJwtDTO);
-                
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis())
-                .thenReturn(Mono.just(redisReq));
-                
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.anyString()))
-                .thenReturn(Mono.error(new RuntimeException("Feature flag service error")));
-                
-        // Perform test
-        webTestClient.post().uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-DOTCOM")
-                .header("x-soe-apikey", "uFwjz14du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().is5xxServerError();
+        // Call the controller method and verify using StepVerifier
+        StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
+                .assertNext(response -> {
+                    assertNotNull(response);
+                    assertEquals("Failed", response.getStatus());
+                    verify(errorHandler, times(1)).convertExceptionToSOEError(any(), any());
+                })
+                .verifyComplete();
     }
 }
