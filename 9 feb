@@ -1,117 +1,187 @@
-Test
-public void testCompareQuotes() throws IOException {
-    // Setup test data
-    List<CompareQuoteResponse> compareQuoteResponsesList = new ArrayList<>();
-    CompareQuoteRequest compareQuoteRequest = new CompareQuoteRequest();
-    QuoteTimer timer = new QuoteTimer();
-    SOEError sOEError = new SOEError();
-    DueMonthly dueMonthly = new DueMonthly();
-    DueToday dueToday = new DueToday();
-    List<SOEError> metrics = new ArrayList<>();
-    
-    sOEError.setMessage("Error Msg");
-    metrics.add(sOEError);
-    
-    dueMonthly.setDueMonthlyChargesTotal("12");
-    dueToday.setDueTodayChargesTotal("100");
-    
-    // Set up the CompareQuoteRequest with required values
-    compareQuoteRequest.setFullAccNumber("A");
-    compareQuoteRequest.setCart1("cart1");
-    compareQuoteRequest.setCart2("cart2");
-    compareQuoteRequest.setCart3("cart3");
-    
-    // Create the current quote response
-    CompareQuoteResponse current = new CompareQuoteResponse();
-    current.setMetrics(metrics);
-    current.setQuoteLabel("Current");
-    compareQuoteResponsesList.add(current);
-    
-    // Create the quote1 response
-    CompareQuoteResponse quote1 = new CompareQuoteResponse();
-    quote1.setMetrics(metrics);
-    quote1.setDueMonthly(dueMonthly);
-    quote1.setDueToday(dueToday);
-    quote1.setQuoteLabel("Quote 1");
-    compareQuoteResponsesList.add(quote1);
-    
-    // Create the quote2 response
-    CompareQuoteResponse quote2 = new CompareQuoteResponse();
-    quote2.setMetrics(metrics);
-    quote2.setDueMonthly(dueMonthly);
-    quote2.setDueToday(dueToday);
-    quote2.setQuoteLabel("Quote 2");
-    compareQuoteResponsesList.add(quote2);
-    
-    // Create the quote3 response
-    CompareQuoteResponse quote3 = new CompareQuoteResponse();
-    quote3.setMetrics(metrics);
-    quote3.setDueMonthly(dueMonthly);
-    quote3.setDueToday(dueToday);
-    quote3.setQuoteLabel("Quote 3");
-    compareQuoteResponsesList.add(quote3);
-    
-    // Initialize the quoteService
-    QuoteService quoteService = new QuoteService();
-    
-    // Mock any dependencies that quoteService might have
-    QuoteServiceHelper quoteServiceHelper = Mockito.mock(QuoteServiceHelper.class);
-    FeatureFlagHelper featureFlagHelper = Mockito.mock(FeatureFlagHelper.class);
-    QuoteServiceProperties quoteServiceProperties = Mockito.mock(QuoteServiceProperties.class);
-    
-    // Set up the mocks
-    Mockito.when(quoteServiceProperties.getEnableResponseMock()).thenReturn(true);
-    
-    // Set mocked objects into quoteService using reflection or constructor
-    // This part depends on how quoteService is implemented
-    // For example: 
-    // ReflectionTestUtils.setField(quoteService, "quoteServiceHelper", quoteServiceHelper);
-    // ReflectionTestUtils.setField(quoteService, "featureFlagHelper", featureFlagHelper);
-    // ReflectionTestUtils.setField(quoteService, "quoteServiceProperties", quoteServiceProperties);
-    
-    // Setup mocks for the populateCompareQuotesValues method
-    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, null))
-           .thenReturn(Mono.just(current));
-    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart1()))
-           .thenReturn(Mono.just(quote1));
-    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart2()))
-           .thenReturn(Mono.just(quote2));
-    Mockito.when(quoteServiceHelper.populateCompareQuotesValues(compareQuoteRequest, compareQuoteRequest.getCart3()))
-           .thenReturn(Mono.just(quote3));
-    
-    // Mock feature flag
-    Map<String, Boolean> featureFlagsMap = new HashMap<>();
-    featureFlagsMap.put("someFeature", true);
-    Mockito.when(featureFlagHelper.getFeatureFlagsWithThrottle(Mockito.anyString()))
-           .thenReturn(Mono.just(featureFlagsMap));
-    
-    // Call the method under test
-    Mono<CompareQuotesResponse> compareQuotesRespMono = quoteService.mergeCompareQuotes(
-            Mono.just(current),
-            Mono.just(quote1),
-            Mono.just(quote2),
-            Mono.just(quote3),
-            timer,
-            compareQuoteRequest
-    );
-    
-    // Assert the result
-    StepVerifier.create(compareQuotesRespMono)
-                .expectNextMatches(response -> {
-                    List<CompareQuoteResponse> responses = response.getCompareQuoteResponses();
-                    return responses.size() == 4 &&
-                           responses.get(0).getQuoteLabel().equals("Current") &&
-                           responses.get(1).getQuoteLabel().equals("Quote 1") &&
-                           responses.get(2).getQuoteLabel().equals("Quote 2") &&
-                           responses.get(3).getQuoteLabel().equals("Quote 3");
-                })
-                .verifyComplete();
-    
-    // Test the compareQuotes method
-    Mono<CompareQuotesResponse> cqpResponse = quoteService.compareQuotes(compareQuoteRequest);
-    
-    // Verify the result
-    StepVerifier.create(cqpResponse)
-                .expectNext(Mockito.any(CompareQuotesResponse.class))
-                .verifyComplete();
+package onevz.soe.activation.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import onevz.soe.activation.helper.*;
+import onevz.soe.activation.model.RedisReqData;
+import onevz.soe.activation.service.OrderConfirmationRedesignService;
+import onevz.soe.activation.ui.request.OrderConfirmationRequest;
+import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
+import onevz.soe.constants.SOEConstants;
+import onevz.soe.logging.constant.LogConstants;
+import onevz.soe.security.model.SsoJwtDTO;
+import onevz.soe.spring.web.filter.RequestAccessContext;
+import onevz.soe.utilities.StringUtilities;
+import onevz.soe.wsclient.http.exceptions.SOEHTTPException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import reactor.core.publisher.Mono;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+@ExtendWith(SpringExtension.class)
+@WebMvcTest(OrderConfirmationRedesignController.class)
+public class OrderConfirmationRedesignControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private OrderConfirmationRedesignService orderConfirmService;
+
+    @MockBean
+    private SsoJwtTokenProcessorHelper tokenProcessorHelper;
+
+    @MockBean
+    private RedisHelper redisHelper;
+
+    @MockBean
+    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+
+    @MockBean
+    private FeatureFlagIntegrationService featureFlagIntegrationService;
+
+    @MockBean
+    private ErrorHandlerHelper errorHandler;
+
+    @InjectMocks
+    private OrderConfirmationRedesignController orderConfirmationRedesignController;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private OrderConfirmationRequest orderConfirmationRequest;
+    private SsoJwtDTO ssoJwtDTO;
+    private RedisReqData redisReqData;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        orderConfirmationRequest = new OrderConfirmationRequest();
+        ssoJwtDTO = new SsoJwtDTO();
+        redisReqData = new RedisReqData();
+
+        // Mocking behavior
+        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(ssoJwtDTO);
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReqData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any())).thenReturn(Mono.just(true));
+    }
+
+    /**
+     * **Test Case 1:** Validate Success Response when data is present in Redis
+     */
+    @Test
+    void testGetConfirmationRedesignPageInfo_Success() throws Exception {
+        // Given
+        redisReqData.setCompletedCartId("12345");
+        OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+        response.setStatus("Success");
+
+        when(orderConfirmService.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(response));
+        when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any())).thenReturn(response);
+
+        // When & Then
+        mockMvc.perform(post("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(orderConfirmationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Success"));
+    }
+
+    /**
+     * **Test Case 2:** Validate failure when no cartId or completedCartId is present in Redis
+     */
+    @Test
+    void testGetConfirmationRedesignPageInfo_CartIdNotPresent() throws Exception {
+        // Given
+        redisReqData.setCartId(null);
+        redisReqData.setCompletedCartId(null);
+
+        when(errorHandler.convertExceptionToSOEErrorID(any(), any(), any())).thenReturn("CartId is not present");
+        
+        // When & Then
+        mockMvc.perform(post("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(orderConfirmationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Failed"))
+                .andExpect(jsonPath("$.errors").value("CartId is not present"));
+    }
+
+    /**
+     * **Test Case 3:** Validate error response when order is not submitted yet
+     */
+    @Test
+    void testGetConfirmationRedesignPageInfo_OrderNotSubmitted() throws Exception {
+        // Given
+        redisReqData.setCartId("someCartId");
+        redisReqData.setCompletedCartId(null);
+
+        when(errorHandler.convertExceptionToSOEError(any(), any())).thenReturn("Order is not submitted yet");
+
+        // When & Then
+        mockMvc.perform(post("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(orderConfirmationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Failed"))
+                .andExpect(jsonPath("$.errors").value("Order is not submitted yet"));
+    }
+
+    /**
+     * **Test Case 4:** Validate response when affiliate is missing and is retrieved from header
+     */
+    @Test
+    void testGetConfirmationRedesignPageInfo_AffiliateMissing() throws Exception {
+        // Given
+        redisReqData.setAffiliate(null);
+        redisReqData.setCompletedCartId("12345");
+        when(redisHelper.getAffiliateFromHeader(any())).thenReturn("AFF123");
+
+        OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+        response.setStatus("Success");
+
+        when(orderConfirmService.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(response));
+        when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any())).thenReturn(response);
+
+        // When & Then
+        mockMvc.perform(post("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(orderConfirmationRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Success"));
+    }
+
+    /**
+     * **Test Case 5:** Validate handling of exceptions
+     */
+    @Test
+    void testGetConfirmationRedesignPageInfo_ExceptionHandling() throws Exception {
+        // Given
+        when(orderConfirmService.getConfirmationPageRedesignInfo(any())).thenThrow(new RuntimeException("Internal Server Error"));
+
+        // When & Then
+        mockMvc.perform(post("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(orderConfirmationRequest)))
+                .andExpect(status().is5xxServerError());
+    }
 }
