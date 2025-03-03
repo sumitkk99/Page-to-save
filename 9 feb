@@ -1,67 +1,43 @@
-public class OrderConfirmationRedesignControllerTest {
+@Test
+public void testGetConfirmationRedesignPageInfo_Success() throws SOEHTTPException {
+    // Mock request
+    ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
 
-    @InjectMocks
-    private OrderConfirmationRedesignController controller;
+    // Create and initialize OrderConfirmationRequest properly
+    OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
+    MetaRequestUI metaRequestUI = new MetaRequestUI(); // Ensure MetaRequestUI is not null
+    metaRequestUI.setAffiliate("testAffiliate");
+    orderConfirmationRequest.setMeta(metaRequestUI); // Set MetaRequestUI in OrderConfirmationRequest
 
-    @Mock
-    private RedisHelper redisHelper;
+    // Mock SSO Token
+    SsoJwtDTO mockSsoJwt = new SsoJwtDTO();
+    mockSsoJwt.setVzwAccountNumber("123456789");
 
-    @Mock
-    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+    // Mock Redis Data
+    RedisReqData mockRedisData = new RedisReqData();
+    mockRedisData.setCartId("CART123");
+    mockRedisData.setCompletedCartId("COMPLETED_CART123");
 
-    @Mock
-    private OrderConfirmationRedesignService orderConfirmationRedesignService;
+    // Mock Feature Flag Response
+    Mono<Boolean> featureFlagResponse = Mono.just(true);
 
-    @Mock
-    private ErrorHandlerHelper errorHandler;
+    // Mocking token processor behavior
+    when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(mockSsoJwt);
 
-    @Mock
-    private FeatureFlagIntegrationService featureFlagIntegrationService;
+    // Mock Service Call Responses
+    when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
+    when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(mockSsoJwt.getVzwAccountNumber()))
+            .thenReturn(featureFlagResponse);
+    when(orderConfirmationRedesignService.getConfirmationPageRedesignInfo(any()))
+            .thenReturn(Mono.just(new OrderConfirmationRedesignResponse()));
 
-    @Mock
-    private SsoJwtTokenProcessorHelper tokenProcessorHelper; // Add this mock
-
-    @Before
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo_Success() throws SOEHTTPException {
-        // Mock request
-        ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
-        OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
-
-        // Mock SSO Token
-        SsoJwtDTO mockSsoJwt = new SsoJwtDTO();
-        mockSsoJwt.setVzwAccountNumber("123456789");
-
-        // Mock Redis Data
-        RedisReqData mockRedisData = new RedisReqData();
-        mockRedisData.setCartId("CART123");
-        mockRedisData.setCompletedCartId("COMPLETED_CART123");
-
-        // Mock Feature Flag Response
-        Mono<Boolean> featureFlagResponse = Mono.just(true);
-
-        // Mocking the token processor behavior
-        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(mockSsoJwt);
-
-        // Mock Service Call Responses
-        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
-        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(mockSsoJwt.getVzwAccountNumber()))
-                .thenReturn(featureFlagResponse);
-        when(orderConfirmationRedesignService.getConfirmationPageRedesignInfo(any()))
-                .thenReturn(Mono.just(new OrderConfirmationRedesignResponse()));
-
-        // Call the controller method and verify using StepVerifier
-        StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
-                .assertNext(response -> {
-                    assertNotNull(response);
-                    verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); 
-                    verify(redisHelper, times(1)).getConfirmationPageDataFromRedis();
-                    verify(featureFlagIntegrationService, times(1)).orderConfirmationCloudFixFFlag(any());
-                })
-                .verifyComplete();
-    }
+    // Call the controller method and verify using StepVerifier
+    StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
+            .assertNext(response -> {
+                assertNotNull(response);
+                verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); 
+                verify(redisHelper, times(1)).getConfirmationPageDataFromRedis();
+                verify(featureFlagIntegrationService, times(1)).orderConfirmationCloudFixFFlag(any());
+            })
+            .verifyComplete();
 }
