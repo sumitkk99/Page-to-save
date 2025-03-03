@@ -1,36 +1,13 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
-import onevz.soe.activation.controller.OrderConfirmationRedesignController;
-import onevz.soe.activation.helper.OrderConfirmationRedesignHelper;
-import onevz.soe.activation.helper.RedisHelper;
-import onevz.soe.activation.service.OrderConfirmationRedesignService;
-import onevz.soe.activation.ui.request.OrderConfirmationRequest;
-import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
-import onevz.soe.activation.helper.ErrorHandlerHelper;
-import onevz.soe.activation.integration.FeatureFlagIntegrationService;
-import onevz.soe.activation.ui.response.RedisReqData;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
-
-import static org.mockito.ArgumentMatchers.any;
-
-@ExtendWith(MockitoExtension.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@RunWith(SpringJUnit4ClassRunner.class)
+@SpringBootTest(classes = {ActivationServiceTestConfig.class}, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebTestClient(timeout = "100000")
 public class OrderConfirmationRedesignControllerTest2 {
 
     @Autowired
-    private WebTestClient webTestClient; // ✅ Fix: Autowired properly
+    private WebTestClient webTestClient; // ✅ Fix: Properly Autowired WebTestClient
 
     @Autowired
-    private OrderConfirmationRedesignController controller; // ✅ Fix: Autowired instead of InjectMocks
+    private OrderConfirmationRedesignController controller; // ✅ Fix: Use @Autowired instead of @InjectMocks
 
     @MockBean
     private RedisHelper redisHelper;
@@ -47,18 +24,22 @@ public class OrderConfirmationRedesignControllerTest2 {
     @MockBean
     private FeatureFlagIntegrationService featureFlagIntegrationService;
 
-    private OrderConfirmationRequest request;
-    private OrderConfirmationRedesignResponse response;
+    @Test
+    public void initBinderByNameTest() {
+        WebDataBinder binder = new WebDataBinder(null);
+        controller.initBinderByName(binder);
+        assertNotNull(binder.getDisallowedFields());
+    }
 
-    @BeforeEach
-    public void setup() throws Exception {
+    @Test
+    public void testGetConfirmationRedesignPageInfo() throws Exception {
+        // ✅ Read JSON files and parse objects
         ObjectMapper mapper = new ObjectMapper();
-
         String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
         String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
 
-        request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
+        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
+        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
         RedisReqData redisReq = RedisReqData.builder()
                 .cartId("")
@@ -68,21 +49,14 @@ public class OrderConfirmationRedesignControllerTest2 {
                 .completedCartId("3efad59a-f94e-45fa-9ed9-fd72aeae9bd5")
                 .build();
 
-        // ✅ Mock dependencies
+        // ✅ Mock Dependencies Properly
         Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any())).thenReturn(Mono.just(Boolean.TRUE));
-        Mockito.when(service.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(response));
-        Mockito.when(redisHelper.upsertDataInRedis(any())).thenReturn(Mono.just(true));
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any())).thenReturn(response);
-    }
+        Mockito.when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(Mockito.any())).thenReturn(Mono.just(Boolean.TRUE));
+        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
+        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
+        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any())).thenReturn(response);
 
-    @Test
-    public void initBinderByNameTest() {
-        assert controller != null;
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo() {
+        // ✅ Use WebTestClient to test API call
         webTestClient.post()
                 .uri("/getConfirmationRedesignPage")
                 .contentType(MediaType.APPLICATION_JSON)
