@@ -3,11 +3,11 @@ public void testGetConfirmationRedesignPageInfo_Success() throws SOEHTTPExceptio
     // Mock request
     ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
 
-    // Create and initialize OrderConfirmationRequest properly
+    // Ensure OrderConfirmationRequest has a non-null MetaRequestUI
     OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
-    MetaRequestUI metaRequestUI = new MetaRequestUI(); // Ensure MetaRequestUI is not null
-    metaRequestUI.setAffiliate("testAffiliate");
-    orderConfirmationRequest.setMeta(metaRequestUI); // Set MetaRequestUI in OrderConfirmationRequest
+    MetaRequestUI metaRequestUI = new MetaRequestUI(); // Initialize MetaRequestUI
+    metaRequestUI.setAffiliate("testAffiliate"); // Set a test value
+    orderConfirmationRequest.setMeta(metaRequestUI); // Set MetaRequestUI in request object
 
     // Mock SSO Token
     SsoJwtDTO mockSsoJwt = new SsoJwtDTO();
