@@ -1,43 +1,119 @@
-@Test
-public void testGetConfirmationRedesignPageInfo_Success() throws SOEHTTPException {
-    // Mock request
-    ServerHttpRequest request = MockServerHttpRequest.post("/getConfirmationRedesignPage").build();
+package onevz.soe.activation.test.controller;
 
-    // Ensure OrderConfirmationRequest has a non-null MetaRequestUI
-    OrderConfirmationRequest orderConfirmationRequest = new OrderConfirmationRequest();
-    MetaRequestUI metaRequestUI = new MetaRequestUI(); // Initialize MetaRequestUI
-    metaRequestUI.setAffiliate("testAffiliate"); // Set a test value
-    orderConfirmationRequest.setMeta(metaRequestUI); // Set MetaRequestUI in request object
+import com.fasterxml.jackson.databind.ObjectMapper;
+import onevz.soe.activation.controller.OrderConfirmationRedesignController;
+import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
+import onevz.soe.activation.helper.*;
+import onevz.soe.activation.model.RedisReqData;
+import onevz.soe.activation.service.OrderConfirmationRedesignService;
+import onevz.soe.activation.test.config.ActivationServiceTestConfig;
+import onevz.soe.activation.test.helper.TestingHelper;
+import onevz.soe.activation.ui.request.OrderConfirmationRequest;
+import onevz.soe.security.model.SsoJwtDTO;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
 
-    // Mock SSO Token
-    SsoJwtDTO mockSsoJwt = new SsoJwtDTO();
-    mockSsoJwt.setVzwAccountNumber("123456789");
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
-    // Mock Redis Data
-    RedisReqData mockRedisData = new RedisReqData();
-    mockRedisData.setCartId("CART123");
-    mockRedisData.setCompletedCartId("COMPLETED_CART123");
+@RunWith(SpringRunner.class)
+@ContextConfiguration(classes = { ActivationServiceTestConfig.class })
+@AutoConfigureWebTestClient
+public class OrderConfirmationRedesignControllerTest {
 
-    // Mock Feature Flag Response
-    Mono<Boolean> featureFlagResponse = Mono.just(true);
+    @Autowired
+    private WebTestClient webTestClient;
 
-    // Mocking token processor behavior
-    when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(mockSsoJwt);
+    @MockBean
+    private RedisHelper redisHelper;
 
-    // Mock Service Call Responses
-    when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(mockRedisData));
-    when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(mockSsoJwt.getVzwAccountNumber()))
-            .thenReturn(featureFlagResponse);
-    when(orderConfirmationRedesignService.getConfirmationPageRedesignInfo(any()))
-            .thenReturn(Mono.just(new OrderConfirmationRedesignResponse()));
+    @MockBean
+    private OrderConfirmationRedesignService orderConfirmationRedesignService;
 
-    // Call the controller method and verify using StepVerifier
-    StepVerifier.create(controller.getConfirmationRedesignPageInfo(request, null, orderConfirmationRequest))
-            .assertNext(response -> {
-                assertNotNull(response);
-                verify(orderConfirmationRedesignHelper, times(1)).setFeatureFlags(any(), any()); 
-                verify(redisHelper, times(1)).getConfirmationPageDataFromRedis();
-                verify(featureFlagIntegrationService, times(1)).orderConfirmationCloudFixFFlag(any());
-            })
-            .verifyComplete();
+    @MockBean
+    private FeatureFlagIntegrationService featureFlagIntegrationService;
+
+    @MockBean
+    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+
+    @MockBean
+    private ErrorHandlerHelper errorHandler;
+
+    @Test
+    public void testGetConfirmationRedesignPageInfo_Success() throws Exception {
+        // Mock Redis data
+        RedisReqData redisReqData = RedisReqData.builder()
+                .cartId("cart123")
+                .completedCartId("completedCart123")
+                .affiliate("affiliate123")
+                .cjevent("cjevent123")
+                .build();
+
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReqData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any())).thenReturn(Mono.just(true));
+
+        // Mock service response
+        OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+        when(orderConfirmationRedesignService.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(response));
+
+        // Perform the test
+        webTestClient.post()
+                .uri("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new OrderConfirmationRequest())
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    public void testGetConfirmationRedesignPageInfo_NoCartId() throws Exception {
+        // Mock Redis data with no cartId
+        RedisReqData redisReqData = RedisReqData.builder()
+                .cartId(null)
+                .completedCartId(null)
+                .build();
+
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReqData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any())).thenReturn(Mono.just(true));
+
+        // Perform the test
+        webTestClient.post()
+                .uri("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new OrderConfirmationRequest())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo("Failed");
+    }
+
+    @Test
+    public void testGetConfirmationRedesignPageInfo_FeatureFlagFalse() throws Exception {
+        // Mock Redis data
+        RedisReqData redisReqData = RedisReqData.builder()
+                .cartId("cart123")
+                .completedCartId("completedCart123")
+                .build();
+
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReqData));
+        when(featureFlagIntegrationService.orderConfirmationCloudFixFFlag(any())).thenReturn(Mono.just(false));
+
+        // Perform the test
+        webTestClient.post()
+                .uri("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new OrderConfirmationRequest())
+                .exchange()
+                .expectStatus().isOk();
+    }
 }
