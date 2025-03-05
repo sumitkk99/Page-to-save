@@ -1,6 +1,6 @@
-
+// Mock SsoJwtDTO and its method getVzwAccountNumber()
 SsoJwtDTO mockSsoJwtDTO = Mockito.mock(SsoJwtDTO.class);
-Mockito.when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("anyAccountNumber");  
+Mockito.when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("anyAccountNumber"); // Example value
 
-
+// Mock orderConfirmationRedesignHelper.setFeatureFlags with any string
 Mockito.doNothing().when(orderConfirmationRedesignHelper).setFeatureFlags(Mockito.any(), Mockito.anyString());
