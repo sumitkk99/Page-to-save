@@ -1,6 +1,31 @@
-// Mock SsoJwtDTO and its method getVzwAccountNumber()
-SsoJwtDTO mockSsoJwtDTO = Mockito.mock(SsoJwtDTO.class);
-Mockito.when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("anyAccountNumber"); // Example value
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import java.util.HashMap;
+import java.util.Map;
 
-// Mock orderConfirmationRedesignHelper.setFeatureFlags with any string
-Mockito.doNothing().when(orderConfirmationRedesignHelper).setFeatureFlags(Mockito.any(), Mockito.anyString());
+@Component
+public class OrderConfirmationRedesignHelper {
+
+    private final FeatureFlagIntegrationService featureFlagIntegrationService;
+
+    public OrderConfirmationRedesignHelper(FeatureFlagIntegrationService featureFlagIntegrationService) {
+        this.featureFlagIntegrationService = featureFlagIntegrationService;
+    }
+
+    public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse, SsoJwtDTO ssoJwtDTO) {
+        if (ssoJwtDTO == null || ssoJwtDTO.getVzwAccountNumber() == null || ssoJwtDTO.getVzwAccountNumber().isEmpty()) {
+            return;
+        }
+
+        Mono<Map<String, Boolean>> featureFlagsMapMono = featureFlagIntegrationService.getFeatureFlagsWithThrottle(ssoJwtDTO.getVzwAccountNumber());
+
+        featureFlagsMapMono.subscribe(featureFlags -> {
+            if (featureFlags == null) {
+                featureFlags = new HashMap<>();
+            }
+            featureFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
+                    featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
+            orderConfirmationRedesignResponse.setFeatureFlags(featureFlags);
+        });
+    }
+}
