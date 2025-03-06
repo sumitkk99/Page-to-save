@@ -1,28 +1,29 @@
-public class OrderConfirmationRedesignHelperTest {
+@Test
+public void performMaskingOnResponseTest() {
+    // Mock SsoJwtDTO with a valid account number
+    SsoJwtDTO mockSsojwtDTO = mock(SsoJwtDTO.class);
+    when(mockSsojwtDTO.getVzwAccountNumber()).thenReturn("1234567890");
 
-    @Test
-    public void performMaskingonResponseTest() {
-        // Mock SsoJwtDTO with a valid account number
-        SsoJwtDTO mockSsojwtDTO = mock(SsoJwtDTO.class);
-        when(mockSsojwtDTO.getVzwAccountNumber()).thenReturn("1234567890");
+    // Mock featureFlagIntegrationService to return an empty map for the specific account number
+    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
+        .thenReturn(Mono.just(new HashMap<>())); // Return an empty map instead of Mono.empty()
 
-        // Mock featureFlagIntegrationService to return Mono.empty() for the specific account number
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
-            .thenReturn(Mono.empty()); // Simulate a null featureFlags scenario
+    // Mock the showMultipleOrderNumbersInIOCFFlag method to return false
+    when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
+        .thenReturn(false);
 
-        // Mock the showMultipleOrderNumbersInIOCFFlag method to return false
-        when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
-            .thenReturn(false);
+    // Create a response object
+    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
 
-        // Create a response object
-        OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+    // Call the method under test
+    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
 
-        // Call the method under test
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
+    // Verify the behavior
+    assertNotNull(response.getFeatureFlags()); // Ensure featureFlags is not null
 
-        // Verify the behavior
-        assertNotNull(response.getFeatureFlags()); // Ensure featureFlags is not null
-        assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG)); // Ensure the flag is added
-        assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG)); // Ensure the flag value is correct
-    }
+    // Check if the key exists in the featureFlags map
+    assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
+
+    // Check the value of the key
+    assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
 }
