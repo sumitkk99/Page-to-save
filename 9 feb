@@ -1,31 +1,55 @@
-import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
-import java.util.HashMap;
-import java.util.Map;
+@Test
+public void performMaskingOnResponseTest() {
+    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+    SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
 
-@Component
-public class OrderConfirmationRedesignHelper {
+    // Mock ssoJwtDTO to return a valid VzwAccountNumber
+    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("123456789");
 
-    private final FeatureFlagIntegrationService featureFlagIntegrationService;
+    // Mock feature flags map
+    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+    featureFlagsMap.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
 
-    public OrderConfirmationRedesignHelper(FeatureFlagIntegrationService featureFlagIntegrationService) {
-        this.featureFlagIntegrationService = featureFlagIntegrationService;
-    }
+    // Mock service calls
+    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(Mono.just(featureFlagsMap));
 
-    public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse, SsoJwtDTO ssoJwtDTO) {
-        if (ssoJwtDTO == null || ssoJwtDTO.getVzwAccountNumber() == null || ssoJwtDTO.getVzwAccountNumber().isEmpty()) {
-            return;
-        }
+    when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCCFlag())
+            .thenReturn(false);
 
-        Mono<Map<String, Boolean>> featureFlagsMapMono = featureFlagIntegrationService.getFeatureFlagsWithThrottle(ssoJwtDTO.getVzwAccountNumber());
+    // Call the method
+    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
 
-        featureFlagsMapMono.subscribe(featureFlags -> {
-            if (featureFlags == null) {
-                featureFlags = new HashMap<>();
-            }
-            featureFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
-                    featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
-            orderConfirmationRedesignResponse.setFeatureFlags(featureFlags);
-        });
-    }
+    // Verify feature flags are set correctly
+    assertEquals(true, response.getFeatureFlags().get(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
+    assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
+}
+
+@Test
+public void testSetFeatureFlags_WhenFeatureFlagsMapIsNull() {
+    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+    SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
+    
+    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("123456789");
+
+    // Mock Mono returning null to trigger featureFlags = new HashMap<>();
+    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(Mono.just(null));
+
+    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
+
+    // Ensure that a new HashMap was assigned
+    assertNotNull(response.getFeatureFlags());
+    assertTrue(response.getFeatureFlags().isEmpty());
+}
+
+@Test
+public void testSetFeatureFlags_WhenSsoJwtDtoIsNull() {
+    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+
+    // Pass null to trigger return statement
+    orderConfirmationRedesignHelper.setFeatureFlags(response, null);
+
+    // Verify that feature flags are never set
+    assertNull(response.getFeatureFlags());
 }
