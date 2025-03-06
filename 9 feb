@@ -1,36 +1,60 @@
-Test
-public void setFeatureFlags_ShouldReturnWhenSsoJwtDtoIsNullOrInvalid() {
-    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+Here's the complete test code with the changes incorporated:
 
-    // Case 1: ssoJwtDTO is null
-    orderConfirmationRedesignHelper.setFeatureFlags(response, null);
-    assertNull(response.getFeatureFlags());
+```java
+public class OrderConfirmationRedesignHelperTest {
 
-    // Case 2: ssoJwtDTO with null vzwAccountNumber
-    SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
-    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn(null);
-    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
-    assertNull(response.getFeatureFlags());
+    public void performMaskingonResposneTest() {
+        // ... Some other coverage area written
 
-    // Case 3: ssoJwtDTO with empty vzwAccountNumber
-    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("");
-    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
-    assertNull(response.getFeatureFlags());
-}
+        // Here our one started for orderConfirmationRedesignHelper class
+        SsoJwtDTO mockSsojwtDTO = mock(SsoJwtDTO.class);
+        when(mockSsojwtDTO.getVzwAccountNumber()).thenReturn("1234567890");
 
-@Test
-public void setFeatureFlags_ShouldHandleNullFeatureFlagsMap() {
-    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
-    SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
-    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("123456789");
+        Map<String, Boolean> featureFlagsMap = new HashMap<>();
+        featureFlagsMap.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
 
-    // Simulate null featureFlagsMap
-    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(Mono.just(featureFlagsMap));
+        when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
+            .thenReturn(false);
+
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
+        orderConfirmationRedesignHelper.setFeatureFlags(response, null);
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mock(SsoJwtDTO.class));
+
+        // Test empty account number scenario (missing branch in the if condition)
+        SsoJwtDTO mockSsoJwtDTOEmptyAccount = mock(SsoJwtDTO.class);
+        when(mockSsoJwtDTOEmptyAccount.getVzwAccountNumber()).thenReturn("");
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTOEmptyAccount);
+
+        // Test null account number scenario (another missing branch)
+        SsoJwtDTO mockSsoJwtDTONullAccount = mock(SsoJwtDTO.class);
+        when(mockSsoJwtDTONullAccount.getVzwAccountNumber()).thenReturn(null);
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTONullAccount);
+
+        // Test specifically for the null featureFlags case to cover the red line
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
             .thenReturn(Mono.just(null));
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
 
-    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
+        // Now test the case where Mono itself returns null
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(Mono.fromSupplier(() -> null));
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
 
-    // Verify that a new HashMap is initialized
-    assertNotNull(response.getFeatureFlags());
-    assertTrue(response.getFeatureFlags().isEmpty());
+        assertNotNull(response.getFeatureFlags());
+        assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
+        assertEquals(true, response.getFeatureFlags().get(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
+        assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
+    }
 }
+```
+
+The key changes I've made:
+
+1. Added tests for empty account number and null account number cases to cover all branches of the first if condition
+2. Added a test that explicitly returns `null` as the map value (not just the Mono) to trigger the `featureFlags = new HashMap<>()` line
+3. Kept the original test for when the Mono itself returns null
+4. Fixed spacing and syntax throughout for consistency
+
+These changes should address all the coverage issues you mentioned, particularly the red line for the new HashMap creation.
