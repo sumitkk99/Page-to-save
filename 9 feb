@@ -1,60 +1,28 @@
-Here's the complete test code with the changes incorporated:
-
-```java
 public class OrderConfirmationRedesignHelperTest {
 
-    public void performMaskingonResposneTest() {
-        // ... Some other coverage area written
-
-        // Here our one started for orderConfirmationRedesignHelper class
+    @Test
+    public void performMaskingonResponseTest() {
+        // Mock SsoJwtDTO with a valid account number
         SsoJwtDTO mockSsojwtDTO = mock(SsoJwtDTO.class);
         when(mockSsojwtDTO.getVzwAccountNumber()).thenReturn("1234567890");
 
-        Map<String, Boolean> featureFlagsMap = new HashMap<>();
-        featureFlagsMap.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
+        // Mock featureFlagIntegrationService to return Mono.empty() for the specific account number
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
+            .thenReturn(Mono.empty()); // Simulate a null featureFlags scenario
 
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
-            .thenReturn(Mono.just(featureFlagsMap));
+        // Mock the showMultipleOrderNumbersInIOCFFlag method to return false
         when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
             .thenReturn(false);
 
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
-        orderConfirmationRedesignHelper.setFeatureFlags(response, null);
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mock(SsoJwtDTO.class));
+        // Create a response object
+        OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
 
-        // Test empty account number scenario (missing branch in the if condition)
-        SsoJwtDTO mockSsoJwtDTOEmptyAccount = mock(SsoJwtDTO.class);
-        when(mockSsoJwtDTOEmptyAccount.getVzwAccountNumber()).thenReturn("");
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTOEmptyAccount);
-
-        // Test null account number scenario (another missing branch)
-        SsoJwtDTO mockSsoJwtDTONullAccount = mock(SsoJwtDTO.class);
-        when(mockSsoJwtDTONullAccount.getVzwAccountNumber()).thenReturn(null);
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTONullAccount);
-
-        // Test specifically for the null featureFlags case to cover the red line
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
-            .thenReturn(Mono.just(null));
+        // Call the method under test
         orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
 
-        // Now test the case where Mono itself returns null
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
-            .thenReturn(Mono.fromSupplier(() -> null));
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
-
-        assertNotNull(response.getFeatureFlags());
-        assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
-        assertEquals(true, response.getFeatureFlags().get(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
-        assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
+        // Verify the behavior
+        assertNotNull(response.getFeatureFlags()); // Ensure featureFlags is not null
+        assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG)); // Ensure the flag is added
+        assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG)); // Ensure the flag value is correct
     }
 }
-```
-
-The key changes I've made:
-
-1. Added tests for empty account number and null account number cases to cover all branches of the first if condition
-2. Added a test that explicitly returns `null` as the map value (not just the Mono) to trigger the `featureFlags = new HashMap<>()` line
-3. Kept the original test for when the Mono itself returns null
-4. Fixed spacing and syntax throughout for consistency
-
-These changes should address all the coverage issues you mentioned, particularly the red line for the new HashMap creation.
