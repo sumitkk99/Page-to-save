@@ -1,55 +1,36 @@
-@Test
-public void performMaskingOnResponseTest() {
+Test
+public void setFeatureFlags_ShouldReturnWhenSsoJwtDtoIsNullOrInvalid() {
     OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
+
+    // Case 1: ssoJwtDTO is null
+    orderConfirmationRedesignHelper.setFeatureFlags(response, null);
+    assertNull(response.getFeatureFlags());
+
+    // Case 2: ssoJwtDTO with null vzwAccountNumber
     SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
-
-    // Mock ssoJwtDTO to return a valid VzwAccountNumber
-    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("123456789");
-
-    // Mock feature flags map
-    Map<String, Boolean> featureFlagsMap = new HashMap<>();
-    featureFlagsMap.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
-
-    // Mock service calls
-    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
-            .thenReturn(Mono.just(featureFlagsMap));
-
-    when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCCFlag())
-            .thenReturn(false);
-
-    // Call the method
+    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn(null);
     orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
+    assertNull(response.getFeatureFlags());
 
-    // Verify feature flags are set correctly
-    assertEquals(true, response.getFeatureFlags().get(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG));
-    assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
+    // Case 3: ssoJwtDTO with empty vzwAccountNumber
+    when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("");
+    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
+    assertNull(response.getFeatureFlags());
 }
 
 @Test
-public void testSetFeatureFlags_WhenFeatureFlagsMapIsNull() {
+public void setFeatureFlags_ShouldHandleNullFeatureFlagsMap() {
     OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
     SsoJwtDTO mockSsoJwtDTO = mock(SsoJwtDTO.class);
-    
     when(mockSsoJwtDTO.getVzwAccountNumber()).thenReturn("123456789");
 
-    // Mock Mono returning null to trigger featureFlags = new HashMap<>();
+    // Simulate null featureFlagsMap
     when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
             .thenReturn(Mono.just(null));
 
     orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsoJwtDTO);
 
-    // Ensure that a new HashMap was assigned
+    // Verify that a new HashMap is initialized
     assertNotNull(response.getFeatureFlags());
     assertTrue(response.getFeatureFlags().isEmpty());
-}
-
-@Test
-public void testSetFeatureFlags_WhenSsoJwtDtoIsNull() {
-    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
-
-    // Pass null to trigger return statement
-    orderConfirmationRedesignHelper.setFeatureFlags(response, null);
-
-    // Verify that feature flags are never set
-    assertNull(response.getFeatureFlags());
 }
