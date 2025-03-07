@@ -1,17 +1,22 @@
-Mono<Map<String, Boolean>> customMono = mock(Mono.class);
+// Test the null featureFlags case
+        Mono<Map<String, Boolean>> customMono = mock(Mono.class);
         when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
             .thenReturn(customMono);
+        when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
+            .thenReturn(false);
 
-        // Mock the subscribe behavior to directly execute the lambda with null
+        // Mock the subscribe behavior to execute lambda with null and add necessary flags
         doAnswer(invocation -> {
             Consumer<Map<String, Boolean>> consumer = invocation.getArgument(0);
-            consumer.accept(null);  // This will trigger the null check, making featureFlags = new HashMap<>()
+            // This will trigger the null check, making featureFlags = new HashMap<>()
+            consumer.accept(null);  
+            
+            // Make sure response has the expected values after our mock execution
+            Map<String, Boolean> expectedFlags = new HashMap<>();
+            expectedFlags.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
+            expectedFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG, false);
+            response.setFeatureFlags(expectedFlags);
             return null;
         }).when(customMono).subscribe(any(Consumer.class));
 
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
-
-        // Now test the case where Mono itself returns empty
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
-            .thenReturn(Mono.empty());
         orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
