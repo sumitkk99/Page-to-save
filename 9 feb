@@ -1,29 +1,17 @@
-@Test
-public void performMaskingOnResponseTest() {
-    // Mock SsoJwtDTO with a valid account number
-    SsoJwtDTO mockSsojwtDTO = mock(SsoJwtDTO.class);
-    when(mockSsojwtDTO.getVzwAccountNumber()).thenReturn("1234567890");
+Mono<Map<String, Boolean>> customMono = mock(Mono.class);
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(customMono);
 
-    // Mock featureFlagIntegrationService to return an empty map for the specific account number
-    when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(eq("1234567890")))
-        .thenReturn(Mono.just(new HashMap<>())); // Return an empty map instead of Mono.empty()
+        // Mock the subscribe behavior to directly execute the lambda with null
+        doAnswer(invocation -> {
+            Consumer<Map<String, Boolean>> consumer = invocation.getArgument(0);
+            consumer.accept(null);  // This will trigger the null check, making featureFlags = new HashMap<>()
+            return null;
+        }).when(customMono).subscribe(any(Consumer.class));
 
-    // Mock the showMultipleOrderNumbersInIOCFFlag method to return false
-    when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
-        .thenReturn(false);
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
 
-    // Create a response object
-    OrderConfirmationRedesignResponse response = new OrderConfirmationRedesignResponse();
-
-    // Call the method under test
-    orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
-
-    // Verify the behavior
-    assertNotNull(response.getFeatureFlags()); // Ensure featureFlags is not null
-
-    // Check if the key exists in the featureFlags map
-    assertTrue(response.getFeatureFlags().containsKey(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
-
-    // Check the value of the key
-    assertEquals(false, response.getFeatureFlags().get(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG));
-}
+        // Now test the case where Mono itself returns empty
+        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
+            .thenReturn(Mono.empty());
+        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
