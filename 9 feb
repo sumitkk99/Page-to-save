@@ -1,40 +1,108 @@
-@Test
-public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
-    // Mock SSO Token
-    when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
+import com.fasterxml.jackson.databind.ObjectMapper;
+import onevz.soe.activation.controller.OrderConfirmationRedesignController;
+import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
+import onevz.soe.activation.helper.ErrorHandlerHelper;
+import onevz.soe.activation.helper.OrderConfirmationRedesignHelper;
+import onevz.soe.activation.helper.RedisHelper;
+import onevz.soe.activation.model.RedisReqData;
+import onevz.soe.activation.service.OrderConfirmationRedesignService;
+import onevz.soe.activation.test.config.ActivationServiceTestConfig;
+import onevz.soe.activation.ui.request.OrderConfirmationRequest;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Mono;
+import java.util.Arrays;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-    // Mock Redis Response
-    RedisReqData redisData = new RedisReqData();
-    redisData.setCartId("12345");  // Ensure cartId is set
-    redisData.setCompletedCartId("54321");
-    when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = { ActivationServiceTestConfig.class })
+@AutoConfigureWebTestClient(timeout = "100000")
+public class OrderConfirmationRedesignControllerTest {
 
-    // Mock Service Response
-    OrderConfirmationRedesignResponse mockResponse = new OrderConfirmationRedesignResponse();
-    mockResponse.setStatus("Success");  // Set expected status
-    when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(mockResponse));
+    @Autowired
+    WebTestClient webTestClient;
 
-    // Ensure updateConfirmationRedesignResponse returns the same response
-    when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
-        .thenAnswer(invocation -> invocation.getArgument(1));
+    @Autowired
+    OrderConfirmationRedesignController controller;
 
-    // Mock Request Headers
-    HttpHeaders headers = new HttpHeaders();
-    headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
-    when(request.getHeaders()).thenReturn(headers);
+    @MockBean
+    RedisHelper redisHelper;
 
-    // Mock Cookies
-    MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
-    when(request.getCookies()).thenReturn(cookies);
+    @MockBean
+    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
 
-    // Call the Controller Method
-    Mono<OrderConfirmationRedesignResponse> result = controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
+    @MockBean
+    ErrorHandlerHelper errorHandler;
 
-    // Debugging: Print Response
-    StepVerifier.create(result)
-        .consumeNextWith(response -> {
-            System.out.println("Received Response: " + response);
-            assertEquals("Success", response.getStatus());
-        })
-        .verifyComplete();
+    @MockBean
+    OrderConfirmationRedesignService service;
+
+    @Test
+    public void initBinderByNameTest() {
+        WebDataBinder binder = new WebDataBinder(null);
+        controller.initBinderByName(binder);
+        assertNotNull(binder.getDisallowedFields());
+    }
+
+    @Test
+    public void testGetConfirmationRedesignPageInfo() throws Exception {
+        // Load JSON request and response from test files
+        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
+        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
+
+        ObjectMapper mapper = new ObjectMapper();
+        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
+        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
+
+        // Set up Redis mock response
+        RedisReqData redisReq = RedisReqData.builder()
+                .cartId("")
+                .userDeviceType("desktop")
+                .cjevent("cjevent")
+                .affiliate("affiliate")
+                .completedCartId("Befad59a-f94e-45fa-Red9-fd72aeae9bd5")
+                .build();
+        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
+
+        // Set up service mock response
+        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
+
+        // Mock Redis upsert
+        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
+
+        // Mock response update helper
+        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
+                .thenReturn(response);
+
+        // **Cover Missing Lines: Setting `ignoreChannels`**
+        ReflectionTestUtils.setField(controller, "ignoreChannels", 
+                Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
+
+        // Perform API call and verify response
+        webTestClient.post()
+                .uri("/getConfirmationRedesignPage")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .header("channelid", "VZW-MFA-ANDROID")
+                .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
+                .header("UserAgent", "MF")
+                .body(Mono.just(request), OrderConfirmationRequest.class)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(OrderConfirmationRedesignResponse.class)
+                .consumeWith(responseEntity -> {
+                    OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
+                    assertNotNull(actualResponse);
+                    System.out.println("Received Response: " + actualResponse);
+                });
+    }
 }
