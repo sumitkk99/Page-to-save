@@ -1,22 +1,168 @@
-// Test the null featureFlags case
-        Mono<Map<String, Boolean>> customMono = mock(Mono.class);
-        when(featureFlagIntegrationService.getFeatureFlagsWithThrottle(any()))
-            .thenReturn(customMono);
-        when(featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag())
-            .thenReturn(false);
+@ExtendWith(MockitoExtension.class)
+public class OrderConfirmationRedesignControllerTest1 {
 
-        // Mock the subscribe behavior to execute lambda with null and add necessary flags
-        doAnswer(invocation -> {
-            Consumer<Map<String, Boolean>> consumer = invocation.getArgument(0);
-            // This will trigger the null check, making featureFlags = new HashMap<>()
-            consumer.accept(null);  
+    @InjectMocks
+    private OrderConfirmationRedesignController controller;
+
+    @Mock
+    private OrderConfirmationRedesignService orderConfrimSer;
+
+    @Mock
+    private SsoJwtTokenProcessorHelper tokenProcessorHelper;
+
+    @Mock
+    private RedisHelper redisHelper;
+
+    @Mock
+    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+
+    @Mock
+    private ErrorHandlerHelper errorHandler;
+
+    @Mock
+    private ServerHttpRequest request;
+
+    @Mock
+    private ServerHttpResponse response;
+
+    @Mock
+    private OrderConfirmationRequest orderConfirmationRequest;
+
+    @BeforeEach
+    public void setup() {
+        // Initialize Meta object for order confirmation request
+        Meta meta = new Meta();
+        when(orderConfirmationRequest.getMeta()).thenReturn(meta);
+        
+        // Mock path for request
+        when(request.getPath()).thenReturn(URI.create("/getConfirmationRedesignPage"));
+        
+        // Mock cookies removal
+        when(redisHelper.deleteKeysFromRedis(anyList())).thenReturn(Mono.just(true));
+        
+        // Mock data upsert
+        when(redisHelper.upsertDataInRedis(any())).thenReturn(Mono.just(true));
+    }
+
+    @Test
+    public void testGetConfirmationRedesignPageInfo_completedCartIdAndCartIdEmpty() throws SOEHTTPException {
+        // Create mock RedisReqData with both completedCartId and cartId as null or empty
+        RedisReqData redisData = new RedisReqData();
+        // Both completedCartId and cartId are null by default
+        
+        // Mock error response for the case
+        SOEError error = new SOEError();
+        error.setErrorId("ID_1008");
+        List<SOEError> errors = Collections.singletonList(error);
+        
+        // Create response with Failed status
+        OrderConfirmationRedesignResponse mockResponse = OrderConfirmationRedesignResponse.builder()
+                .status("Failed")
+                .statusCode(200)
+                .errors(errors)
+                .build();
+        
+        // Mock the error handler to return the errors list
+        when(errorHandler.convertExceptionToSOEErrorID(
+                eq("CartId is not present in Redis for Digital Order Confirmation Page"),
+                eq("Order Confirmation Service"),
+                eq("ID_1008")
+        )).thenReturn(errors);
+        
+        // Mock the token processor and redis helper
+        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
+        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
+        
+        // Configure request headers
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
+        when(request.getHeaders()).thenReturn(headers);
+        
+        // Configure request cookies
+        MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
+        when(request.getCookies()).thenReturn(cookies);
+        
+        // Call the method under test
+        Mono<OrderConfirmationRedesignResponse> result = 
+                controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
+        
+        // Verify that the response has a "Failed" status
+        StepVerifier.create(result)
+                .expectNextMatches(response -> response.getStatus().equals("Failed") 
+                        && response.getStatusCode() == 200
+                        && response.getErrors() != null 
+                        && response.getErrors().size() == 1
+                        && "ID_1008".equals(response.getErrors().get(0).getErrorId()))
+                .verifyComplete();
+    }
+    
+    @Test
+    public void testGetConfirmationRedesignPageInfo_ignoreChannelsWithCartId() throws SOEHTTPException {
+        // Create mock RedisReqData with cartId set but completedCartId empty
+        RedisReqData redisData = new RedisReqData();
+        redisData.setCartId("testCartId");
+        
+        // Mock the channel ID from RequestDataBuilder
+        try (MockedStatic<RequestDataBuilder> mockRequestDataBuilder = Mockito.mockStatic(RequestDataBuilder.class);
+             MockedStatic<RequestAccessContext> mockRequestAccessContext = Mockito.mockStatic(RequestAccessContext.class)) {
             
-            // Make sure response has the expected values after our mock execution
-            Map<String, Boolean> expectedFlags = new HashMap<>();
-            expectedFlags.put(ActivationConstants.ORDER_CONFIRMATION_CLOUD_FIX_FFLAG, true);
-            expectedFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG, false);
-            response.setFeatureFlags(expectedFlags);
-            return null;
-        }).when(customMono).subscribe(any(Consumer.class));
-
-        orderConfirmationRedesignHelper.setFeatureFlags(response, mockSsojwtDTO);
+            // Mock the context builder
+            RequestDataBuilder.ContextBuilder contextBuilder = mock(RequestDataBuilder.ContextBuilder.class);
+            RequestDataBuilder.ContextBuilder fromAllBuilder = mock(RequestDataBuilder.ContextBuilder.class);
+            
+            mockRequestDataBuilder.when(RequestDataBuilder::withContext).thenReturn(contextBuilder);
+            when(contextBuilder.fromAll()).thenReturn(fromAllBuilder);
+            when(fromAllBuilder.getValue("channelid")).thenReturn("TEST_CHANNEL");
+            
+            // Mock the session ID in RequestAccessContext
+            mockRequestAccessContext.when(() -> 
+                    RequestAccessContext.getRequestHeader(SOEConstants.DIGITAL_IG_SESSIONID))
+                    .thenReturn("test-session-id");
+            
+            // Mock controller ignoreChannels to include our test channel
+            Field ignoreChannelsField = OrderConfirmationRedesignController.class.getDeclaredField("ignoreChannels");
+            ignoreChannelsField.setAccessible(true);
+            Set<String> ignoreChannels = new HashSet<>();
+            ignoreChannels.add("TEST_CHANNEL");
+            ignoreChannelsField.set(controller, ignoreChannels);
+            
+            // Create a successful response
+            OrderConfirmationRedesignResponse serviceResponse = new OrderConfirmationRedesignResponse();
+            serviceResponse.setStatus("Success");
+            serviceResponse.setStatusCode(200);
+            
+            // Mock dependencies
+            when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
+            when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
+            when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(serviceResponse));
+            when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
+                    .thenReturn(serviceResponse);
+            when(orderConfirmationRedesignHelper.populateAdditionalDetailsInRedis(any(), any(), any())).thenReturn(true);
+            when(orderConfirmationRedesignHelper.setFeatureFlags(any(), any())).thenReturn(true);
+            
+            // Configure request headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
+            when(request.getHeaders()).thenReturn(headers);
+            
+            // Configure request cookies
+            MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
+            when(request.getCookies()).thenReturn(cookies);
+            
+            // Call the method under test
+            Mono<OrderConfirmationRedesignResponse> result = 
+                    controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
+            
+            // Verify the result matches expectations
+            StepVerifier.create(result)
+                    .expectNextMatches(response -> response.getStatus().equals("Success") 
+                            && response.getStatusCode() == 200)
+                    .verifyComplete();
+            
+            // Verify cartId was set from data.getCartId()
+            verify(orderConfirmationRequest.getMeta()).setCartid("testCartId");
+        } catch (Exception e) {
+            fail("Test setup failed: " + e.getMessage());
+        }
+    }
+}
