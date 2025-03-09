@@ -1,79 +1,41 @@
-@ExtendWith(MockitoExtension.class)
-public class OrderConfirmationRedesignControllerTest1 {
+@Test
+public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
+    // Mocking Redis data
+    RedisReqData redisData = new RedisReqData();
+    redisData.setCartId("someCartId");  // Prevent null check failures
+    redisData.setCompletedCartId("completedCartId");
 
-    @InjectMocks
-    private OrderConfirmationRedesignController controller;
+    when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
 
-    @Mock
-    private OrderConfirmationRedesignService orderConfrimSer;
+    // Mocking SSO token
+    when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
 
-    @Mock
-    private SsoJwtTokenProcessorHelper tokenProcessorHelper;
+    // Mocking response from service
+    OrderConfirmationRedesignResponse mockResponse = new OrderConfirmationRedesignResponse();
+    mockResponse.setStatus("Success");
 
-    @Mock
-    private RedisHelper redisHelper;
+    when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(mockResponse));
 
-    @Mock
-    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+    // Mocking response update
+    when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
+        .thenReturn(mockResponse);
 
-    @Mock
-    private ErrorHandlerHelper errorHandler;
+    // Mocking headers
+    HttpHeaders headers = new HttpHeaders();
+    headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
+    when(request.getHeaders()).thenReturn(headers);
 
-    @Mock
-    private ServerHttpRequest request;
+    // Mocking session cookies
+    MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
+    cookies.add("sessionStartKey", new HttpCookie("sessionStartKey", "sessionValue"));
+    when(request.getCookies()).thenReturn(cookies);
 
-    @Mock
-    private ServerHttpResponse response;
+    // Calling method under test
+    Mono<OrderConfirmationRedesignResponse> result =
+        controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
 
-    @Mock
-    private OrderConfirmationRequest orderConfirmationRequest;
-
-    @BeforeEach
-    public void setup() {
-        // Initialize mocks and other setup tasks
-        Meta meta = new Meta();
-        when(orderConfirmationRequest.getMeta()).thenReturn(meta);
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
-        // Mocking dependencies
-        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
-        
-        // Create a RedisReqData with properties set to test uncovered lines
-        RedisReqData redisData = new RedisReqData();
-        redisData.setCartId("testCartId");
-        when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
-        
-        // Set up the response to match success
-        OrderConfirmationRedesignResponse mockResponse = new OrderConfirmationRedesignResponse();
-        mockResponse.setStatus("Success");
-        when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(mockResponse));
-        when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
-            .thenReturn(mockResponse);
-        
-        // Set up the path
-        when(request.getPath()).thenReturn(URI.create("/getConfirmationRedesignPage"));
-        
-        // Mock Redis operations to complete properly
-        when(redisHelper.deleteKeysFromRedis(anyList())).thenReturn(Mono.just(true));
-        when(redisHelper.upsertDataInRedis(any())).thenReturn(Mono.just(true));
-        
-        // Mocking request headers
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
-        when(request.getHeaders()).thenReturn(headers);
-
-        MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
-        when(request.getCookies()).thenReturn(cookies);
-        
-        // Calling the method under test
-        Mono<OrderConfirmationRedesignResponse> result =
-                controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
-
-        // Verifying the result
-        StepVerifier.create(result)
-                .expectNextMatches(res -> "Success".equals(res.getStatus()))
-                .verifyComplete();
-    }
+    // Verifying the result
+    StepVerifier.create(result)
+        .expectNextMatches(response -> response.getStatus().equals("Success"))
+        .verifyComplete();
 }
