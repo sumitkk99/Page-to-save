@@ -1,71 +1,40 @@
-@ExtendWith(MockitoExtension.class)
-public class OrderConfirmationRedesignControllerTest1 {
+@Test
+public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
+    // Mock SSO Token
+    when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
 
-    @InjectMocks
-    private OrderConfirmationRedesignController controller;
+    // Mock Redis Response
+    RedisReqData redisData = new RedisReqData();
+    redisData.setCartId("12345");  // Ensure cartId is set
+    redisData.setCompletedCartId("54321");
+    when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
 
-    @Mock
-    private OrderConfirmationRedesignService orderConfrimSer;
+    // Mock Service Response
+    OrderConfirmationRedesignResponse mockResponse = new OrderConfirmationRedesignResponse();
+    mockResponse.setStatus("Success");  // Set expected status
+    when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(mockResponse));
 
-    @Mock
-    private SsoJwtTokenProcessorHelper tokenProcessorHelper;
+    // Ensure updateConfirmationRedesignResponse returns the same response
+    when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
+        .thenAnswer(invocation -> invocation.getArgument(1));
 
-    @Mock
-    private RedisHelper redisHelper;
+    // Mock Request Headers
+    HttpHeaders headers = new HttpHeaders();
+    headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
+    when(request.getHeaders()).thenReturn(headers);
 
-    @Mock
-    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+    // Mock Cookies
+    MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
+    when(request.getCookies()).thenReturn(cookies);
 
-    @Mock
-    private ErrorHandlerHelper errorHandler;
+    // Call the Controller Method
+    Mono<OrderConfirmationRedesignResponse> result = controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
 
-    @Mock
-    private ServerHttpRequest request;
-
-    @Mock
-    private ServerHttpResponse response;
-
-    @Mock
-    private OrderConfirmationRequest orderConfirmationRequest;
-
-    @BeforeEach
-    public void setup() {
-        // Manually initializing ignoreChannels
-        ReflectionTestUtils.setField(controller, "ignoreChannels", 
-            Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
-
-        // Other setup tasks
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
-        // Mocking dependencies
-        when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
-
-        when(redisHelper.getConfirmationPageDataFromRedis())
-            .thenReturn(Mono.just(new RedisReqData()));
-
-        when(orderConfrimSer.getConfirmationPageRedesignInfo(any()))
-            .thenReturn(Mono.just(new OrderConfirmationRedesignResponse()));
-
-        when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
-            .thenReturn(new OrderConfirmationRedesignResponse());
-
-        // Mocking request headers
-        HttpHeaders headers = new HttpHeaders();
-        headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
-        when(request.getHeaders()).thenReturn(headers);
-
-        MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
-        when(request.getCookies()).thenReturn(cookies);
-
-        // Calling the method under test
-        Mono<OrderConfirmationRedesignResponse> result =
-            controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
-
-        // Verifying the result
-        StepVerifier.create(result)
-            .expectNextMatches(response -> response.getStatus().equals("Success"))
-            .verifyComplete();
-    }
+    // Debugging: Print Response
+    StepVerifier.create(result)
+        .consumeNextWith(response -> {
+            System.out.println("Received Response: " + response);
+            assertEquals("Success", response.getStatus());
+        })
+        .verifyComplete();
 }
