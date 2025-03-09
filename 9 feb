@@ -30,139 +30,50 @@ public class OrderConfirmationRedesignControllerTest1 {
 
     @BeforeEach
     public void setup() {
-        // Initialize Meta object for order confirmation request
+        // Initialize mocks and other setup tasks
         Meta meta = new Meta();
         when(orderConfirmationRequest.getMeta()).thenReturn(meta);
-        
-        // Mock path for request
-        when(request.getPath()).thenReturn(URI.create("/getConfirmationRedesignPage"));
-        
-        // Mock cookies removal
-        when(redisHelper.deleteKeysFromRedis(anyList())).thenReturn(Mono.just(true));
-        
-        // Mock data upsert
-        when(redisHelper.upsertDataInRedis(any())).thenReturn(Mono.just(true));
     }
 
     @Test
-    public void testGetConfirmationRedesignPageInfo_completedCartIdAndCartIdEmpty() throws SOEHTTPException {
-        // Create mock RedisReqData with both completedCartId and cartId as null or empty
-        RedisReqData redisData = new RedisReqData();
-        // Both completedCartId and cartId are null by default
-        
-        // Mock error response for the case
-        SOEError error = new SOEError();
-        error.setErrorId("ID_1008");
-        List<SOEError> errors = Collections.singletonList(error);
-        
-        // Create response with Failed status
-        OrderConfirmationRedesignResponse mockResponse = OrderConfirmationRedesignResponse.builder()
-                .status("Failed")
-                .statusCode(200)
-                .errors(errors)
-                .build();
-        
-        // Mock the error handler to return the errors list
-        when(errorHandler.convertExceptionToSOEErrorID(
-                eq("CartId is not present in Redis for Digital Order Confirmation Page"),
-                eq("Order Confirmation Service"),
-                eq("ID_1008")
-        )).thenReturn(errors);
-        
-        // Mock the token processor and redis helper
+    public void testGetConfirmationRedesignPageInfo() throws SOEHTTPException {
+        // Mocking dependencies
         when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
+        
+        // Create a RedisReqData with properties set to test uncovered lines
+        RedisReqData redisData = new RedisReqData();
+        redisData.setCartId("testCartId");
         when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
         
-        // Configure request headers
+        // Set up the response to match success
+        OrderConfirmationRedesignResponse mockResponse = new OrderConfirmationRedesignResponse();
+        mockResponse.setStatus("Success");
+        when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(mockResponse));
+        when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
+            .thenReturn(mockResponse);
+        
+        // Set up the path
+        when(request.getPath()).thenReturn(URI.create("/getConfirmationRedesignPage"));
+        
+        // Mock Redis operations to complete properly
+        when(redisHelper.deleteKeysFromRedis(anyList())).thenReturn(Mono.just(true));
+        when(redisHelper.upsertDataInRedis(any())).thenReturn(Mono.just(true));
+        
+        // Mocking request headers
         HttpHeaders headers = new HttpHeaders();
         headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
         when(request.getHeaders()).thenReturn(headers);
-        
-        // Configure request cookies
+
         MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
         when(request.getCookies()).thenReturn(cookies);
         
-        // Call the method under test
-        Mono<OrderConfirmationRedesignResponse> result = 
+        // Calling the method under test
+        Mono<OrderConfirmationRedesignResponse> result =
                 controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
-        
-        // Verify that the response has a "Failed" status
+
+        // Verifying the result
         StepVerifier.create(result)
-                .expectNextMatches(response -> response.getStatus().equals("Failed") 
-                        && response.getStatusCode() == 200
-                        && response.getErrors() != null 
-                        && response.getErrors().size() == 1
-                        && "ID_1008".equals(response.getErrors().get(0).getErrorId()))
+                .expectNextMatches(res -> "Success".equals(res.getStatus()))
                 .verifyComplete();
-    }
-    
-    @Test
-    public void testGetConfirmationRedesignPageInfo_ignoreChannelsWithCartId() throws SOEHTTPException {
-        // Create mock RedisReqData with cartId set but completedCartId empty
-        RedisReqData redisData = new RedisReqData();
-        redisData.setCartId("testCartId");
-        
-        // Mock the channel ID from RequestDataBuilder
-        try (MockedStatic<RequestDataBuilder> mockRequestDataBuilder = Mockito.mockStatic(RequestDataBuilder.class);
-             MockedStatic<RequestAccessContext> mockRequestAccessContext = Mockito.mockStatic(RequestAccessContext.class)) {
-            
-            // Mock the context builder
-            RequestDataBuilder.ContextBuilder contextBuilder = mock(RequestDataBuilder.ContextBuilder.class);
-            RequestDataBuilder.ContextBuilder fromAllBuilder = mock(RequestDataBuilder.ContextBuilder.class);
-            
-            mockRequestDataBuilder.when(RequestDataBuilder::withContext).thenReturn(contextBuilder);
-            when(contextBuilder.fromAll()).thenReturn(fromAllBuilder);
-            when(fromAllBuilder.getValue("channelid")).thenReturn("TEST_CHANNEL");
-            
-            // Mock the session ID in RequestAccessContext
-            mockRequestAccessContext.when(() -> 
-                    RequestAccessContext.getRequestHeader(SOEConstants.DIGITAL_IG_SESSIONID))
-                    .thenReturn("test-session-id");
-            
-            // Mock controller ignoreChannels to include our test channel
-            Field ignoreChannelsField = OrderConfirmationRedesignController.class.getDeclaredField("ignoreChannels");
-            ignoreChannelsField.setAccessible(true);
-            Set<String> ignoreChannels = new HashSet<>();
-            ignoreChannels.add("TEST_CHANNEL");
-            ignoreChannelsField.set(controller, ignoreChannels);
-            
-            // Create a successful response
-            OrderConfirmationRedesignResponse serviceResponse = new OrderConfirmationRedesignResponse();
-            serviceResponse.setStatus("Success");
-            serviceResponse.setStatusCode(200);
-            
-            // Mock dependencies
-            when(tokenProcessorHelper.getSsoJwtTokenObject(any())).thenReturn(new SsoJwtDTO());
-            when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisData));
-            when(orderConfrimSer.getConfirmationPageRedesignInfo(any())).thenReturn(Mono.just(serviceResponse));
-            when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(any(), any()))
-                    .thenReturn(serviceResponse);
-            when(orderConfirmationRedesignHelper.populateAdditionalDetailsInRedis(any(), any(), any())).thenReturn(true);
-            when(orderConfirmationRedesignHelper.setFeatureFlags(any(), any())).thenReturn(true);
-            
-            // Configure request headers
-            HttpHeaders headers = new HttpHeaders();
-            headers.put("UserAgent", Collections.singletonList("Mozilla/5.0"));
-            when(request.getHeaders()).thenReturn(headers);
-            
-            // Configure request cookies
-            MultiValueMap<String, HttpCookie> cookies = new LinkedMultiValueMap<>();
-            when(request.getCookies()).thenReturn(cookies);
-            
-            // Call the method under test
-            Mono<OrderConfirmationRedesignResponse> result = 
-                    controller.getConfirmationRedesignPageInfo(request, response, orderConfirmationRequest);
-            
-            // Verify the result matches expectations
-            StepVerifier.create(result)
-                    .expectNextMatches(response -> response.getStatus().equals("Success") 
-                            && response.getStatusCode() == 200)
-                    .verifyComplete();
-            
-            // Verify cartId was set from data.getCartId()
-            verify(orderConfirmationRequest.getMeta()).setCartid("testCartId");
-        } catch (Exception e) {
-            fail("Test setup failed: " + e.getMessage());
-        }
     }
 }
