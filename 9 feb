@@ -1,108 +1,54 @@
-import com.fasterxml.jackson.databind.ObjectMapper;
-import onevz.soe.activation.controller.OrderConfirmationRedesignController;
-import onevz.soe.activation.digital.soe.redesign.OrderConfirmationRedesignResponse;
-import onevz.soe.activation.helper.ErrorHandlerHelper;
-import onevz.soe.activation.helper.OrderConfirmationRedesignHelper;
-import onevz.soe.activation.helper.RedisHelper;
-import onevz.soe.activation.model.RedisReqData;
-import onevz.soe.activation.service.OrderConfirmationRedesignService;
-import onevz.soe.activation.test.config.ActivationServiceTestConfig;
-import onevz.soe.activation.ui.request.OrderConfirmationRequest;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
-import java.util.Arrays;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+@Test
+public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception {
+    // Load JSON request and response from test files
+    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
+    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
 
-@RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = { ActivationServiceTestConfig.class })
-@AutoConfigureWebTestClient(timeout = "100000")
-public class OrderConfirmationRedesignControllerTest {
+    ObjectMapper mapper = new ObjectMapper();
+    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
+    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
-    @Autowired
-    WebTestClient webTestClient;
+    // **Mock Redis response with missing cartId**
+    RedisReqData redisReq = RedisReqData.builder()
+            .cartId("")  // Empty cart ID to trigger missing cartId logic
+            .userDeviceType("desktop")
+            .cjevent("cjevent")
+            .affiliate("affiliate")
+            .completedCartId("")  // Empty completedCartId
+            .build();
 
-    @Autowired
-    OrderConfirmationRedesignController controller;
+    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
 
-    @MockBean
-    RedisHelper redisHelper;
+    // Mock error response when cartId is missing
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
+            .thenReturn(Mono.just(response));
 
-    @MockBean
-    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
+    // Mock Redis upsert
+    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
 
-    @MockBean
-    ErrorHandlerHelper errorHandler;
+    // Mock response update helper
+    Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
+            .thenReturn(response);
 
-    @MockBean
-    OrderConfirmationRedesignService service;
+    // **Cover Missing Lines: Setting `ignoreChannels`**
+    ReflectionTestUtils.setField(controller, "ignoreChannels", 
+            Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
 
-    @Test
-    public void initBinderByNameTest() {
-        WebDataBinder binder = new WebDataBinder(null);
-        controller.initBinderByName(binder);
-        assertNotNull(binder.getDisallowedFields());
-    }
-
-    @Test
-    public void testGetConfirmationRedesignPageInfo() throws Exception {
-        // Load JSON request and response from test files
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-        ObjectMapper mapper = new ObjectMapper();
-        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-        // Set up Redis mock response
-        RedisReqData redisReq = RedisReqData.builder()
-                .cartId("")
-                .userDeviceType("desktop")
-                .cjevent("cjevent")
-                .affiliate("affiliate")
-                .completedCartId("Befad59a-f94e-45fa-Red9-fd72aeae9bd5")
-                .build();
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-
-        // Set up service mock response
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-
-        // Mock Redis upsert
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-
-        // Mock response update helper
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-                .thenReturn(response);
-
-        // **Cover Missing Lines: Setting `ignoreChannels`**
-        ReflectionTestUtils.setField(controller, "ignoreChannels", 
-                Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
-
-        // Perform API call and verify response
-        webTestClient.post()
-                .uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "VZW-MFA-ANDROID")
-                .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
-                .header("UserAgent", "MF")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk()
-                .expectBody(OrderConfirmationRedesignResponse.class)
-                .consumeWith(responseEntity -> {
-                    OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
-                    assertNotNull(actualResponse);
-                    System.out.println("Received Response: " + actualResponse);
-                });
-    }
+    // Perform API call and verify response
+    webTestClient.post()
+            .uri("/getConfirmationRedesignPage")
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
+            .header("channelid", "VZW-TOUCHLESSVM")  // Testing with an ignored channel
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
+            .header("UserAgent", "MF")
+            .body(Mono.just(request), OrderConfirmationRequest.class)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(OrderConfirmationRedesignResponse.class)
+            .consumeWith(responseEntity -> {
+                OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
+                assertNotNull(actualResponse);
+                System.out.println("Received Response: " + actualResponse);
+            });
 }
