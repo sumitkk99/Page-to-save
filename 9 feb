@@ -1,1 +1,59 @@
-In Sonar, some lines in the ControllerTest class are showing as my changes, even though I haven’t modified them. Additionally, none of the ControllerTest or ServiceTest classes are running locally. I'm also trying to cover the controller tests, but since they don’t run locally, I have to check coverage via a full build, which takes ~30 minutes, making debugging difficult.
+@Test
+public void testGetConfirmationRedesignPageInfo_CoverMissingLines() throws Exception {
+    // Load JSON request and response from test files
+    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
+    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
+
+    ObjectMapper mapper = new ObjectMapper();
+    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
+    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
+
+    // Create a RedisReqData that will trigger the specific code path we need to cover
+    RedisReqData redisReq = RedisReqData.builder()
+            .cartId("test-cart-id")  // Not empty cart ID - important for line 154
+            .completedCartId("")     // Empty completedCartId - triggers the first part of line 153
+            .userDeviceType(null)    // Null userDeviceType - ensures line 153 condition is met
+            .cjevent("cjevent")
+            .affiliate("affiliate")
+            .build();
+
+    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
+    
+    // Mock service response
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
+    
+    // Mock helper methods
+    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
+    Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
+            .thenReturn(response);
+            
+    // Set ignoreChannels to include our test channel
+    ReflectionTestUtils.setField(controller, "ignoreChannels", 
+            Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
+    
+    // Perform API call with a channel that's in the ignoreChannels list
+    webTestClient.post()
+            .uri("/getConfirmationRedesignPage")
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
+            .header("channelid", "VZW-TOUCHLESSVM")  // This must be in ignoreChannels list to trigger line 155
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
+            // Not setting UserAgent to ensure userDeviceType remains null
+            .body(Mono.just(request), OrderConfirmationRequest.class)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(OrderConfirmationRedesignResponse.class)
+            .consumeWith(responseEntity -> {
+                OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
+                assertNotNull(actualResponse);
+            });
+    
+    // Verify that the specific code path was executed
+    ArgumentCaptor<OrderConfirmationRequest> requestCaptor = ArgumentCaptor.forClass(OrderConfirmationRequest.class);
+    Mockito.verify(service).getConfirmationPageRedesignInfo(requestCaptor.capture());
+    
+    // Verify the cartId was set from data.getCartId() (line 158)
+    OrderConfirmationRequest capturedRequest = requestCaptor.getValue();
+    assertEquals("test-cart-id", capturedRequest.getMeta().getCartid(), 
+            "CartId should be set from data.getCartId() in the ignored channel path");
+}
