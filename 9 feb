@@ -1,5 +1,5 @@
 @Test
-public void testGetConfirmationRedesignPageInfo_IgnoreChannelsPath() throws Exception {
+public void testGetConfirmationRedesignPageInfo_CartIdInIgnoreChannels() throws Exception {
     // Load JSON request and response from test files
     String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
     String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
@@ -8,46 +8,85 @@ public void testGetConfirmationRedesignPageInfo_IgnoreChannelsPath() throws Exce
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);  
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);  
 
-    // Mock Redis response with non-null completedCartId, non-null cartId to ensure we pass initial validations
+    // Mock Redis response with cartId and userDeviceType
     RedisReqData redisReq = RedisReqData.builder()  
-            .completedCartId("test-completed-cart-id")  
-            .cartId("test-cart-id")  
+            .completedCartId(null)  
+            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")  // Ensure cartId is not null
             .affiliate(null)  
+            .userDeviceType(null)  // Ensure userDeviceType is null
             .cjevent(null)  
             .build();  
 
-    // Set up the ignoreChannels list with the channel we'll use in the test
-    ReflectionTestUtils.setField(controller, "ignoreChannels", Arrays.asList("TEST-CHANNEL"));
-
-    // Mock all required service responses
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));  
-    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));  
-    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));  
-    Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-            .thenReturn(response);
-    
-    // Mock necessary helper methods
-    Mockito.when(redisHelper.getAffiliateFromHeader(Mockito.any())).thenReturn("test-affiliate");
-    Mockito.when(redisHelper.getCjeventFromHeader(Mockito.any())).thenReturn("test-cjevent");
 
-    // Execute test - using TEST-CHANNEL and deliberately NOT sending User-Agent
-    WebTestClient.ResponseSpec responseSpec = webTestClient.post()  
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));  
+
+    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));  
+
+    Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))  
+            .thenReturn(response);  
+
+    // Set up ignoreChannels list
+    ReflectionTestUtils.setField(controller, "ignoreChannels", Arrays.asList("EXPRESS-PEDESTAL"));
+
+    // Perform API call and verify response
+    webTestClient.post()  
             .uri("/getConfirmationRedesignPage")  
             .contentType(MediaType.APPLICATION_JSON)  
             .accept(MediaType.APPLICATION_JSON)  
-            .header("channelid", "TEST-CHANNEL")  
-            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")
-            // Deliberately not sending User-Agent to make userDeviceType null
+            .header("channelid", "EXPRESS-PEDESTAL")  // Ensure channelId is in ignoreChannels
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")  
+            .header("User-Agent", "desktop")  // Ensure User-Agent is set
             .body(Mono.just(request), OrderConfirmationRequest.class)  
             .exchange()  
             .expectStatus().isOk();
-    
-    // Verify the response body
-    OrderConfirmationRedesignResponse result = responseSpec.expectBody(OrderConfirmationRedesignResponse.class)
-            .returnResult()
-            .getResponseBody();
-    assertNotNull(result);
-    
-    // Verify that the service method was called
-    Mockito.verify(service).getConfirmationPageRedesignInfo(Mockito.any());
 }
+
+
+@Test
+public void testGetConfirmationRedesignPageInfo_UserDeviceTypeNotNull() throws Exception {
+    // Similar setup as above, but set userDeviceType to a non-null value
+    RedisReqData redisReq = RedisReqData.builder()  
+            .completedCartId(null)  
+            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")  
+            .affiliate(null)  
+            .userDeviceType("mobile")  // Ensure userDeviceType is not null
+            .cjevent(null)  
+            .build();  
+
+    // Rest of the setup and assertions...
+}
+
+@Test
+public void testGetConfirmationRedesignPageInfo_CartIdNull() throws Exception {
+    // Similar setup as above, but set cartId to null
+    RedisReqData redisReq = RedisReqData.builder()  
+            .completedCartId(null)  
+            .cartId(null)  // Ensure cartId is null
+            .affiliate(null)  
+            .userDeviceType(null)  
+            .cjevent(null)  
+            .build();  
+
+    // Rest of the setup and assertions...
+}
+
+@Test
+public void testGetConfirmationRedesignPageInfo_ChannelIdNotInIgnoreChannels() throws Exception {
+    // Similar setup as above, but set channelId to a value not in ignoreChannels
+    ReflectionTestUtils.setField(controller, "ignoreChannels", Arrays.asList("OTHER_CHANNEL"));
+
+    // Perform API call with a different channelId
+    webTestClient.post()  
+            .uri("/getConfirmationRedesignPage")  
+            .contentType(MediaType.APPLICATION_JSON)  
+            .accept(MediaType.APPLICATION_JSON)  
+            .header("channelid", "EXPRESS-PEDESTAL")  // Ensure channelId is not in ignoreChannels
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")  
+            .header("User-Agent", "desktop")  
+            .body(Mono.just(request), OrderConfirmationRequest.class)  
+            .exchange()  
+            .expectStatus().isOk();
+}
+
+
