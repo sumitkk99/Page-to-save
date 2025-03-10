@@ -1,168 +1,43 @@
+@Test
+public void testGetConfirmationRedesignPageInfo_ignoreChannelWithCartId() throws Exception {
+    // Load JSON request and response from test files
+    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
+    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
 
-@RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(classes = { ActivationServiceTestConfig.class })
-@AutoConfigureWebTestClient(timeout = "100000")
-public class OrderConfirmationRedesignControllerTest {
+    ObjectMapper mapper = new ObjectMapper();  
+    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);  
+    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);  
 
-    @Autowired
-    WebTestClient webTestClient;
+    // Mock Redis response with null completedCartId, non-null cartId, and null userDeviceType
+    // This specifically targets line 153-154 condition
+    RedisReqData redisReq = RedisReqData.builder()  
+            .completedCartId(null)  
+            .cartId("test-cart-id")  // Non-null cartId
+            .affiliate(null)  
+            .cjevent(null)  
+            .build();  
 
-    @Autowired
-    OrderConfirmationRedesignController controller;
+    // Set up the ignoreChannels list with the channel we'll use in the test
+    ReflectionTestUtils.setField(controller, "ignoreChannels", Arrays.asList("TEST-CHANNEL"));
 
-    @MockBean
-    RedisHelper redisHelper;
+    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));  
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));  
+    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));  
+    Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
+            .thenReturn(response);
 
-    @MockBean
-    private OrderConfirmationRedesignHelper orderConfirmationRedesignHelper;
-
-    @MockBean
-    ErrorHandlerHelper errorHandler;
-
-    @MockBean
-    OrderConfirmationRedesignService service;
-
-    private final ObjectMapper mapper = new ObjectMapper();
-
-    @Test
-    public void initBinderByNameTest() {
-        WebDataBinder binder = new WebDataBinder(null);
-        controller.initBinderByName(binder);
-        assertNotNull(binder.getDisallowedFields());
-    }
-
-    // **Test case: Covers lines 153-159**
-    @Test
-    public void testGetConfirmationRedesignPageInfo_CartIdExists_UserDeviceTypeExists() throws Exception {
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-        RedisReqData redisReq = RedisReqData.builder()
-                .completedCartId("12345")
-                .cartId("67890")  // Ensuring cartId exists
-                .affiliate(null)
-                .userDeviceType("mobile")  // User device type exists
-                .cjevent(null)
-                .build();
-
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-                .thenReturn(response);
-
-        webTestClient.post()
-                .uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "EXPRESS-PEDESTAL")
-                .header("User-Agent", "mobile")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    // **Test case: `userDeviceType` is null**
-    @Test
-    public void testGetConfirmationRedesignPageInfo_NoUserDeviceType() throws Exception {
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-        RedisReqData redisReq = RedisReqData.builder()
-                .completedCartId("12345")
-                .cartId("67890")
-                .affiliate(null)
-                .userDeviceType(null)  // `userDeviceType` is null
-                .cjevent(null)
-                .build();
-
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-                .thenReturn(response);
-
-        webTestClient.post()
-                .uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "EXPRESS-PEDESTAL")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    // **Test case: `cartId` is missing but `completedCartId` exists**
-    @Test
-    public void testGetConfirmationRedesignPageInfo_OnlyCompletedCartIdExists() throws Exception {
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-        RedisReqData redisReq = RedisReqData.builder()
-                .completedCartId("12345")
-                .cartId(null)  // cartId is missing
-                .affiliate(null)
-                .userDeviceType("tablet")
-                .cjevent(null)
-                .build();
-
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-                .thenReturn(response);
-
-        webTestClient.post()
-                .uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "EXPRESS-PEDESTAL")
-                .header("User-Agent", "tablet")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
-
-    // **Test case: `ignoreChannels.contains(channelId)` is true**
-    @Test
-    public void testGetConfirmationRedesignPageInfo_IgnoreChannelCondition() throws Exception {
-        String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-        String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-        OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-        OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-        RedisReqData redisReq = RedisReqData.builder()
-                .completedCartId("12345")
-                .cartId("67890")
-                .affiliate(null)
-                .userDeviceType("mobile")
-                .cjevent(null)
-                .build();
-
-        Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-        Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-        Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-        Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
-                .thenReturn(response);
-
-        webTestClient.post()
-                .uri("/getConfirmationRedesignPage")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("channelid", "SOME_IGNORED_CHANNEL")  // Ignore condition
-                .header("User-Agent", "mobile")
-                .body(Mono.just(request), OrderConfirmationRequest.class)
-                .exchange()
-                .expectStatus().isOk();
-    }
+    // This test specifically hits the condition where:
+    // 1. userDeviceType is null (not provided in header)
+    // 2. data.getCartId() is not empty/null (provided in redisReq)
+    // 3. ignoreChannels contains the channelId (TEST-CHANNEL)
+    webTestClient.post()  
+            .uri("/getConfirmationRedesignPage")  
+            .contentType(MediaType.APPLICATION_JSON)  
+            .accept(MediaType.APPLICATION_JSON)  
+            .header("channelid", "TEST-CHANNEL")  // Use a channel that's in the ignoreChannels list
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")
+            // Deliberately not sending User-Agent to make userDeviceType null
+            .body(Mono.just(request), OrderConfirmationRequest.class)  
+            .exchange()  
+            .expectStatus().isOk();
 }
