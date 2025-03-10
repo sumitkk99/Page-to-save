@@ -1,5 +1,5 @@
 @Test
-public void testGetConfirmationRedesignPageInfo_ignoreChannelWithCartId() throws Exception {
+public void testGetConfirmationRedesignPageInfo_IgnoreChannelsPath() throws Exception {
     // Load JSON request and response from test files
     String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
     String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
@@ -8,36 +8,53 @@ public void testGetConfirmationRedesignPageInfo_ignoreChannelWithCartId() throws
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);  
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);  
 
-    // Mock Redis response with null completedCartId, non-null cartId, and null userDeviceType
-    // This specifically targets line 153-154 condition
+    // Mock Redis response targeting the specific condition
     RedisReqData redisReq = RedisReqData.builder()  
-            .completedCartId(null)  
-            .cartId("test-cart-id")  // Non-null cartId
+            .completedCartId(null)  // This should be null to avoid first condition in line 153
+            .cartId("mock-cart-id")  // This needs to be non-null to hit line 155 condition
             .affiliate(null)  
             .cjevent(null)  
             .build();  
 
-    // Set up the ignoreChannels list with the channel we'll use in the test
-    ReflectionTestUtils.setField(controller, "ignoreChannels", Arrays.asList("TEST-CHANNEL"));
+    // Set up the ignoreChannels list to include our test channel
+    // You may need to adjust this based on how ignoreChannels is actually defined in your controller
+    List<String> ignoreChannelsList = Arrays.asList("TEST-CHANNEL", "EXPRESS-PEDESTAL");
+    ReflectionTestUtils.setField(controller, "ignoreChannels", ignoreChannelsList);
 
+    // Mock all necessary service calls
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));  
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));  
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));  
     Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
             .thenReturn(response);
+    
+    // This part is crucial - ensure the captured request matches our expected flow
+    Mockito.doAnswer(invocation -> {
+        OrderConfirmationRequest capturedRequest = invocation.getArgument(0);
+        // We can add assertions here to verify the request was modified as expected
+        // This will help confirm if our test is hitting the right code path
+        assertNotNull(capturedRequest.getMeta().getCartid());
+        assertEquals("mock-cart-id", capturedRequest.getMeta().getCartid());
+        return Mono.just(response);
+    }).when(service).getConfirmationPageRedesignInfo(Mockito.any());
 
-    // This test specifically hits the condition where:
-    // 1. userDeviceType is null (not provided in header)
-    // 2. data.getCartId() is not empty/null (provided in redisReq)
-    // 3. ignoreChannels contains the channelId (TEST-CHANNEL)
+    // Execute the test - omitting User-Agent to ensure userDeviceType is null
     webTestClient.post()  
             .uri("/getConfirmationRedesignPage")  
             .contentType(MediaType.APPLICATION_JSON)  
             .accept(MediaType.APPLICATION_JSON)  
-            .header("channelid", "TEST-CHANNEL")  // Use a channel that's in the ignoreChannels list
+            .header("channelid", "TEST-CHANNEL")  // Using a channel that's in ignoreChannels
             .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")
-            // Deliberately not sending User-Agent to make userDeviceType null
+            // Deliberately NOT setting User-Agent to ensure userDeviceType is null
             .body(Mono.just(request), OrderConfirmationRequest.class)  
             .exchange()  
-            .expectStatus().isOk();
+            .expectStatus().isOk()
+            .expectBody()
+            .consumeWith(result -> {
+                // Add additional assertions if needed
+                assertNotNull(result.getResponseBody());
+            });
+            
+    // Verify the service method was called with the correct parameters
+    Mockito.verify(service, Mockito.times(1)).getConfirmationPageRedesignInfo(Mockito.any());
 }
