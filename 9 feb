@@ -8,39 +8,43 @@ public void testGetConfirmationRedesignPageInfo_CoverLines153To159() throws Exce
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
-    // **Mock Redis response with cartId and userDeviceType**
+    // **Mock Redis response with cartId, completedCartId, and userDeviceType**
     RedisReqData redisReq = RedisReqData.builder()
-            .cartId("12345")  // Non-empty cart ID
-            .userDeviceType("")  // Empty userDeviceType to trigger line 153
+            .cartId("12345")  // Non-empty cart ID (this ensures the condition is met)
+            .completedCartId("Befad59a-f94e-45fa-Red9-fd72aeae9bd5")  // Also set completedCartId
+            .userDeviceType("desktop")  // Valid userDeviceType
             .cjevent("cjevent")
             .affiliate("affiliate")
-            .completedCartId("Befad59a-f94e-45fa-Red9-fd72aeae9bd5")
             .build();
 
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
 
-    // Mock service response
+    // **Mock service response**
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
 
-    // Mock Redis upsert
+    // **Mock Redis upsert**
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
 
-    // Mock response update helper
+    // **Mock response update helper**
     Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
             .thenReturn(response);
 
-    // **Cover Missing Lines: Setting `ignoreChannels`**
+    // **Fix API Key Validation Mocking**
+    Mockito.when(apiKeyValidatorService.isValid(Mockito.eq("uFWjzl4du5e46whYg731CGqriX2162C9"), Mockito.eq("VZW-TOUCHLESSVM")))
+            .thenReturn(true);
+
+    // **Ensure `ignoreChannels` contains the right values**
     ReflectionTestUtils.setField(controller, "ignoreChannels", 
             Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
 
-    // Perform API call and verify response
+    // **Perform API call and verify response**
     webTestClient.post()
             .uri("/getConfirmationRedesignPage")
             .contentType(MediaType.APPLICATION_JSON)
             .accept(MediaType.APPLICATION_JSON)
             .header("channelid", "VZW-TOUCHLESSVM")  // Testing with an ignored channel
-            .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
-            .header("UserAgent", "MF")  // This will be used to set userDeviceType
+            .header("X-SOE-APIKEY", "uFWjzl4du5e46whYg731CGqriX2162C9")  // API Key fix (case-sensitive)
+            .header("User-Agent", "MF")  // This will be used to set userDeviceType
             .body(Mono.just(request), OrderConfirmationRequest.class)
             .exchange()
             .expectStatus().isOk()
