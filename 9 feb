@@ -1,5 +1,5 @@
 @Test
-public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception {
+public void testGetConfirmationRedesignPageInfo_CoverMissingLines() throws Exception {
     // Load JSON request and response from test files
     String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
     String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
@@ -8,42 +8,41 @@ public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
-    // **Mock Redis response with missing cartId**
+    // Build RedisReqData to specifically target the missing code path:
+    // - userDeviceType should be null/empty (line 153)
+    // - data.getCartId() should NOT be empty (line 154)
+    // - channelId should be in ignoreChannels list (line 155)
     RedisReqData redisReq = RedisReqData.builder()
-            .cartId(null)  // Ensure it's NULL to trigger missing cartId logic
-            .userDeviceType("desktop")
+            .cartId("test-cart-id")  // Not empty cart ID to pass line 154
+            .completedCartId("")     // Empty completedCartId
             .cjevent("cjevent")
             .affiliate("affiliate")
-            .completedCartId(null)  // Ensure it's NULL
             .build();
 
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-
-    // **Mock error response when cartId is missing**
-    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-            .thenReturn(Mono.just(OrderConfirmationRedesignResponse.builder()
-                    .errorMessage("Cart ID is missing")
-                    .build()));  
-
-    // Mock Redis upsert
+    
+    // Mock service response
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
+    
+    // Mock helper methods
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-
-    // Mock response update helper
     Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
             .thenReturn(response);
-
-    // **Ensure `ignoreChannels` is correctly set**
+    
+    // Configure ignoreChannels to include our test channel
     ReflectionTestUtils.setField(controller, "ignoreChannels", 
             Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
-
-    // Perform API call and verify response
+    
+    // Perform API call:
+    // - Do NOT set UserAgent header to make userDeviceType null
+    // - Use a channel ID that's in the ignoreChannels list
     webTestClient.post()
             .uri("/getConfirmationRedesignPage")
             .contentType(MediaType.APPLICATION_JSON)
             .accept(MediaType.APPLICATION_JSON)
-            .header("channelid", "VZW-TOUCHLESSVM")  // Testing with an ignored channel
+            .header("channelid", "VZW-TOUCHLESSVM")  // This must be in ignoreChannels
             .header("x-soe-apikey", "uFWjzl4du5e46whYg731CGqriX2162C9")
-            .header("UserAgent", "MF")
+            // Deliberately NOT setting UserAgent header to make userDeviceType null
             .body(Mono.just(request), OrderConfirmationRequest.class)
             .exchange()
             .expectStatus().isOk()
@@ -51,10 +50,13 @@ public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception
             .consumeWith(responseEntity -> {
                 OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
                 assertNotNull(actualResponse);
-                assertEquals("Cart ID is missing", actualResponse.getErrorMessage());
                 System.out.println("Received Response: " + actualResponse);
             });
-
-    // **Verify that the error response logic was executed**
-    Mockito.verify(service, Mockito.times(1)).getConfirmationPageRedesignInfo(Mockito.any());
+    
+    // Verify that the cartId was correctly set to cover line 158
+    // This might require capturing the argument passed to service.getConfirmationPageRedesignInfo
+    ArgumentCaptor<OrderConfirmationRequest> requestCaptor = ArgumentCaptor.forClass(OrderConfirmationRequest.class);
+    Mockito.verify(service).getConfirmationPageRedesignInfo(requestCaptor.capture());
+    OrderConfirmationRequest capturedRequest = requestCaptor.getValue();
+    assertEquals("test-cart-id", capturedRequest.getMeta().getCartid());
 }
