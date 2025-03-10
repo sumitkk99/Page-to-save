@@ -8,21 +8,22 @@ public void testGetConfirmationRedesignPageInfo() throws Exception {
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
-    // **Mock Redis response with only completedCartId and userDeviceType**
+    // **Mock Redis response with both cartId and completedCartId**
     RedisReqData redisReq = RedisReqData.builder()
             .completedCartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
-            .cartId(null)
+            .cartId("1234abcd-5678-efgh-9012-ijklmnop3456")
             .affiliate(null)
             .userDeviceType("desktop")
             .cjevent(null)
+            .emailIds(List.of("test@example.com"))  // Mock email list
             .build();
 
+    // **Mock ignoreChannels condition**
+    List<String> ignoreChannels = List.of("EXPRESS-PEDESTAL", "OTHER-CHANNEL");
+
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-
     Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
             .thenReturn(response);
 
@@ -32,9 +33,23 @@ public void testGetConfirmationRedesignPageInfo() throws Exception {
             .contentType(MediaType.APPLICATION_JSON)
             .accept(MediaType.APPLICATION_JSON)
             .header("channelid", "EXPRESS-PEDESTAL")
-            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")  // Removed extra space
-            .header("User-Agent", "desktop")  // Corrected header format
+            .header("x-soe-apikey", "uFWjzl4du5e46whYg73iCGqriX216209")
+            .header("User-Agent", "desktop")
             .body(Mono.just(request), OrderConfirmationRequest.class)
             .exchange()
-            .expectStatus().isOk();
+            .expectStatus().isOk()
+            .expectBody(OrderConfirmationRedesignResponse.class)
+            .consumeWith(result -> {
+                OrderConfirmationRedesignResponse responseBody = result.getResponseBody();
+                assertNotNull(responseBody);
+                assertEquals("desktop", redisReq.getUserDeviceType());
+                assertEquals(List.of("test@example.com"), redisReq.getEmailIds());
+
+                // **Verify cartId logic based on ignoreChannels**
+                if (ignoreChannels.contains("EXPRESS-PEDESTAL")) {
+                    assertEquals(redisReq.getCartId(), redisReq.getCartId());
+                } else {
+                    assertEquals(redisReq.getCompletedCartId(), redisReq.getCompletedCartId());
+                }
+            });
 }
