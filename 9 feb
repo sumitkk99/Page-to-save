@@ -10,18 +10,20 @@ public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception
 
     // **Mock Redis response with missing cartId**
     RedisReqData redisReq = RedisReqData.builder()
-            .cartId("")  // Empty cart ID to trigger missing cartId logic
+            .cartId(null)  // Ensure it's NULL to trigger missing cartId logic
             .userDeviceType("desktop")
             .cjevent("cjevent")
             .affiliate("affiliate")
-            .completedCartId("")  // Empty completedCartId
+            .completedCartId(null)  // Ensure it's NULL
             .build();
 
     Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
 
-    // Mock error response when cartId is missing
+    // **Mock error response when cartId is missing**
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any()))
-            .thenReturn(Mono.just(response));
+            .thenReturn(Mono.just(OrderConfirmationRedesignResponse.builder()
+                    .errorMessage("Cart ID is missing")
+                    .build()));  
 
     // Mock Redis upsert
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
@@ -30,7 +32,7 @@ public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception
     Mockito.when(orderConfirmationRedesignHelper.updateConfirmationRedesignResponse(Mockito.any(), Mockito.any()))
             .thenReturn(response);
 
-    // **Cover Missing Lines: Setting `ignoreChannels`**
+    // **Ensure `ignoreChannels` is correctly set**
     ReflectionTestUtils.setField(controller, "ignoreChannels", 
             Arrays.asList("VZW-TOUCHLESSVM", "EXPRESS-STORE", "EXPRESS-PEDESTAL"));
 
@@ -49,6 +51,10 @@ public void testGetConfirmationRedesignPageInfo_MissingCartId() throws Exception
             .consumeWith(responseEntity -> {
                 OrderConfirmationRedesignResponse actualResponse = responseEntity.getResponseBody();
                 assertNotNull(actualResponse);
+                assertEquals("Cart ID is missing", actualResponse.getErrorMessage());
                 System.out.println("Received Response: " + actualResponse);
             });
+
+    // **Verify that the error response logic was executed**
+    Mockito.verify(service, Mockito.times(1)).getConfirmationPageRedesignInfo(Mockito.any());
 }
