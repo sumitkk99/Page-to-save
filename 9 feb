@@ -1,4 +1,43 @@
 @Test
+public void testGetConfirmationRedesignPageInfo_AffiliateAndCjeventFromHeaders() throws Exception {
+    // Load JSON request and response
+    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
+    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
+
+    ObjectMapper mapper = new ObjectMapper();
+    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
+    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
+
+    // Mock Redis data with null affiliate and cjevent
+    RedisReqData redisReq = RedisReqData.builder()
+            .completedCartId(null)
+            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
+            .affiliate(null)
+            .cjevent(null)
+            .build();
+
+    // Mock dependencies
+    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
+    Mockito.when(redisHelper.getAffiliateFromHeader(Mockito.any())).thenReturn("testAffiliate");
+    Mockito.when(redisHelper.getCjeventFromHeader(Mockito.any())).thenReturn("testCjevent");
+    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
+    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
+
+    // Perform API call
+    webTestClient.post()
+            .uri("/getConfirmationRedesignPage")
+            .contentType(MediaType.APPLICATION_JSON)
+            .header("channelid", "EXPRESS-PEDESTAL")
+            .header("x-soe-apikey", "VALID_API_KEY_FOR_EXPRESS_PEDESTAL")
+            .header("User-Agent", "desktop")
+            .header("affiliate", "testAffiliate")
+            .header("cjevent", "testCjevent")
+            .bodyValue(request)
+            .exchange()
+            .expectStatus().isOk();
+}
+
+@Test
 public void testGetConfirmationRedesignPageInfo_CartIdInIgnoreChannels() throws Exception {
     // Load JSON request and response
     String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
@@ -8,11 +47,10 @@ public void testGetConfirmationRedesignPageInfo_CartIdInIgnoreChannels() throws 
     OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
     OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
 
-    // Mock Redis data to trigger cartId condition
+    // Mock Redis data with cartId
     RedisReqData redisReq = RedisReqData.builder()
             .completedCartId(null)
-            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")  // Non-null cartId
-            .userDeviceType(null)  // Empty userDeviceType
+            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
             .build();
 
     // Mock dependencies
@@ -20,49 +58,20 @@ public void testGetConfirmationRedesignPageInfo_CartIdInIgnoreChannels() throws 
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
 
-    // Use valid API key for EXPRESS-PEDESTAL channel
+    // Perform API call
     webTestClient.post()
             .uri("/getConfirmationRedesignPage")
             .contentType(MediaType.APPLICATION_JSON)
-            .header("channelid", "EXPRESS-PEDESTAL")  // Channel in ignore list
-            .header("x-soe-apikey", "VALID_API_KEY_FOR_EXPRESS_PEDESTAL") // Valid key
-            .header("User-Agent", "")  // Empty to ensure null userDeviceType
+            .header("channelid", "EXPRESS-PEDESTAL")
+            .header("x-soe-apikey", "VALID_API_KEY_FOR_EXPRESS_PEDESTAL")
+            .header("User-Agent", "desktop")
             .bodyValue(request)
             .exchange()
             .expectStatus().isOk();
 }
 
-
 @Test
-public void testGetConfirmationRedesignPageInfo_UserDeviceTypeNotNull() throws Exception {
-    // Similar setup as above, but set userDeviceType to a non-null value
-    RedisReqData redisReq = RedisReqData.builder()  
-            .completedCartId(null)  
-            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")  
-            .affiliate(null)  
-            .userDeviceType("mobile")  // Ensure userDeviceType is not null
-            .cjevent(null)  
-            .build();  
-
-    // Rest of the setup and assertions...
-}
-
-@Test
-public void testGetConfirmationRedesignPageInfo_CartIdNull() throws Exception {
-    // Similar setup as above, but set cartId to null
-    RedisReqData redisReq = RedisReqData.builder()  
-            .completedCartId(null)  
-            .cartId(null)  // Ensure cartId is null
-            .affiliate(null)  
-            .userDeviceType(null)  
-            .cjevent(null)  
-            .build();  
-
-    // Rest of the setup and assertions...
-}
-
-@Test
-public void testGetConfirmationRedesignPageInfo_ChannelIdNotInIgnoreChannels() throws Exception {
+public void testGetConfirmationRedesignPageInfo_CompletedCartIdInNonIgnoreChannels() throws Exception {
     // Load JSON request and response
     String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
     String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
@@ -82,12 +91,12 @@ public void testGetConfirmationRedesignPageInfo_ChannelIdNotInIgnoreChannels() t
     Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
     Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
 
-    // Use channel NOT in ignore list and valid API key
+    // Perform API call
     webTestClient.post()
             .uri("/getConfirmationRedesignPage")
             .contentType(MediaType.APPLICATION_JSON)
-            .header("channelid", "WEB")  // Channel NOT in ignore list
-            .header("x-soe-apikey", "VALID_API_KEY_FOR_WEB") // Valid key
+            .header("channelid", "WEB")
+            .header("x-soe-apikey", "VALID_API_KEY_FOR_WEB")
             .header("User-Agent", "desktop")
             .bodyValue(request)
             .exchange()
