@@ -1,104 +1,27 @@
-@Test
-public void testGetConfirmationRedesignPageInfo_AffiliateAndCjeventFromHeaders() throws Exception {
-    // Load JSON request and response
-    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
+public static String getDeviceType(String pUserAgent) { 
+    if (pUserAgent == null || pUserAgent.trim().isEmpty()) {
+        return null;  // Fix: return null instead of "DESKTOP"
+    }
 
-    ObjectMapper mapper = new ObjectMapper();
-    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
+    if ("MF".equalsIgnoreCase(pUserAgent)) {
+        return pUserAgent;
+    }
 
-    // Mock Redis data with null affiliate and cjevent
-    RedisReqData redisReq = RedisReqData.builder()
-            .completedCartId(null)
-            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
-            .affiliate(null)
-            .cjevent(null)
-            .build();
+    String pUserAgentLowerCase = pUserAgent.toLowerCase();
 
-    // Mock dependencies
-    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-    Mockito.when(redisHelper.getAffiliateFromHeader(Mockito.any())).thenReturn("testAffiliate");
-    Mockito.when(redisHelper.getCjeventFromHeader(Mockito.any())).thenReturn("testCjevent");
-    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
+    if ((pUserAgentLowerCase.contains("windows") && pUserAgentLowerCase.contains("touch"))
+        || pUserAgentLowerCase.contains("tablet") || pUserAgentLowerCase.contains("ipad")) {
+        return "TABLET";
+    } 
+    
+    if ((pUserAgentLowerCase.contains("mobile") && pUserAgentLowerCase.contains("android"))
+        || pUserAgentLowerCase.contains("windows phone") || pUserAgentLowerCase.contains("mobile")) {
+        return "MOBILE";
+    } 
 
-    // Perform API call
-    webTestClient.post()
-            .uri("/getConfirmationRedesignPage")
-            .contentType(MediaType.APPLICATION_JSON)
-            .header("channelid", "EXPRESS-PEDESTAL")
-            .header("x-soe-apikey", "VALID_API_KEY_FOR_EXPRESS_PEDESTAL")
-            .header("User-Agent", "desktop")
-            .header("affiliate", "testAffiliate")
-            .header("cjevent", "testCjevent")
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isOk();
-}
+    if (pUserAgentLowerCase.contains("android")) {
+        return "TABLET";
+    }
 
-@Test
-public void testGetConfirmationRedesignPageInfo_CartIdInIgnoreChannels() throws Exception {
-    // Load JSON request and response
-    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-    ObjectMapper mapper = new ObjectMapper();
-    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-    // Mock Redis data with cartId
-    RedisReqData redisReq = RedisReqData.builder()
-            .completedCartId(null)
-            .cartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
-            .build();
-
-    // Mock dependencies
-    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-
-    // Perform API call
-    webTestClient.post()
-            .uri("/getConfirmationRedesignPage")
-            .contentType(MediaType.APPLICATION_JSON)
-            .header("channelid", "EXPRESS-PEDESTAL")
-            .header("x-soe-apikey", "VALID_API_KEY_FOR_EXPRESS_PEDESTAL")
-            .header("User-Agent", "desktop")
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isOk();
-}
-
-@Test
-public void testGetConfirmationRedesignPageInfo_CompletedCartIdInNonIgnoreChannels() throws Exception {
-    // Load JSON request and response
-    String requestString = TestingHelper.readFromFile("OrderConfirmationRequest.json");
-    String responseString = TestingHelper.readFromFile("OrderConfirmationRedesignResponse.json");
-
-    ObjectMapper mapper = new ObjectMapper();
-    OrderConfirmationRequest request = mapper.readValue(requestString, OrderConfirmationRequest.class);
-    OrderConfirmationRedesignResponse response = mapper.readValue(responseString, OrderConfirmationRedesignResponse.class);
-
-    // Mock Redis data with completedCartId
-    RedisReqData redisReq = RedisReqData.builder()
-            .completedCartId("1146aa71-453b-4ba0-91af-d8ec365ada19")
-            .cartId(null)
-            .build();
-
-    // Mock dependencies
-    Mockito.when(redisHelper.getConfirmationPageDataFromRedis()).thenReturn(Mono.just(redisReq));
-    Mockito.when(service.getConfirmationPageRedesignInfo(Mockito.any())).thenReturn(Mono.just(response));
-    Mockito.when(redisHelper.upsertDataInRedis(Mockito.any())).thenReturn(Mono.just(true));
-
-    // Perform API call
-    webTestClient.post()
-            .uri("/getConfirmationRedesignPage")
-            .contentType(MediaType.APPLICATION_JSON)
-            .header("channelid", "WEB")
-            .header("x-soe-apikey", "VALID_API_KEY_FOR_WEB")
-            .header("User-Agent", "desktop")
-            .bodyValue(request)
-            .exchange()
-            .expectStatus().isOk();
+    return "DESKTOP";  // Default case remains the same
 }
