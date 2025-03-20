@@ -1,27 +1,15 @@
-public static String getDeviceType(String pUserAgent) { 
-    if (pUserAgent == null || pUserAgent.trim().isEmpty()) {
-        return null;  // Fix: return null instead of "DESKTOP"
+public Mono<Void> setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse, SsoJwtDTO ssoJwtDTO) {
+    if (ssoJwtDTO == null || ssoJwtDTO.getVzwAccountNumber() == null || ssoJwtDTO.getVzwAccountNumber().isEmpty()) {
+        return Mono.empty(); // Return an empty Mono to maintain reactive flow
     }
 
-    if ("MF".equalsIgnoreCase(pUserAgent)) {
-        return pUserAgent;
-    }
-
-    String pUserAgentLowerCase = pUserAgent.toLowerCase();
-
-    if ((pUserAgentLowerCase.contains("windows") && pUserAgentLowerCase.contains("touch"))
-        || pUserAgentLowerCase.contains("tablet") || pUserAgentLowerCase.contains("ipad")) {
-        return "TABLET";
-    } 
-    
-    if ((pUserAgentLowerCase.contains("mobile") && pUserAgentLowerCase.contains("android"))
-        || pUserAgentLowerCase.contains("windows phone") || pUserAgentLowerCase.contains("mobile")) {
-        return "MOBILE";
-    } 
-
-    if (pUserAgentLowerCase.contains("android")) {
-        return "TABLET";
-    }
-
-    return "DESKTOP";  // Default case remains the same
+    return featureFlagIntegrationService.getFeatureFlagsWithThrottle(ssoJwtDTO.getVzwAccountNumber())
+        .defaultIfEmpty(new HashMap<>()) // If Mono emits null, replace it with an empty map
+        .map(featureFlags -> {
+            featureFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG, 
+                             featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
+            return featureFlags;
+        })
+        .doOnNext(orderConfirmationRedesignResponse::setFeatureFlags)
+        .then(); // Returns Mono<Void> to indicate completion
 }
