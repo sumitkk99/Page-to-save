@@ -1,16 +1,12 @@
 public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse) {
-    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+    Map<String, Boolean> featureFlagsMap = Optional.ofNullable(orderConfirmationRedesignResponse.getFeatureFlags())
+            .orElse(new HashMap<>()); // Ensure existing flags are not lost
 
-    // Add existing feature flags
-    featureFlagsMap.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
+    // Add specific feature flags
+    featureFlagsMap.putIfAbsent(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
             featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
 
-    // Ensure new flag is retained
-    if (orderConfirmationRedesignResponse.getFeatureFlags() != null) {
-        featureFlagsMap.putAll(orderConfirmationRedesignResponse.getFeatureFlags());
-    }
-
-    log.info("Final featureFlagsMap before setting: {}", featureFlagsMap);
+    log.info("Final featureFlagsMap before setting in response: {}", featureFlagsMap);
 
     orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
 }
