@@ -1,12 +1,14 @@
-public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse) {
-    Map<String, Boolean> featureFlagsMap = Optional.ofNullable(orderConfirmationRedesignResponse.getFeatureFlags())
-            .orElse(new HashMap<>()); // Ensure existing flags are not lost
+public Mono<OrderConfirmationRedesignResponse> setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse) {
+    return Mono.justOrEmpty(orderConfirmationRedesignResponse.getFeatureFlags()) // Get existing flags reactively
+            .defaultIfEmpty(new HashMap<>()) // Ensure it's not null
+            .map(existingFlags -> {
+                // Add SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG reactively
+                existingFlags.putIfAbsent(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
+                        featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
 
-    // Add specific feature flags
-    featureFlagsMap.putIfAbsent(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
-            featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
+                log.info("Final featureFlagsMap before setting in response: {}", existingFlags);
+                orderConfirmationRedesignResponse.setFeatureFlags(existingFlags);
 
-    log.info("Final featureFlagsMap before setting in response: {}", featureFlagsMap);
-
-    orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
+                return orderConfirmationRedesignResponse;
+            });
 }
