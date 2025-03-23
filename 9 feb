@@ -1,15 +1,16 @@
-public Mono<Void> setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse, SsoJwtDTO ssoJwtDTO) {
-    if (ssoJwtDTO == null || ssoJwtDTO.getVzwAccountNumber() == null || ssoJwtDTO.getVzwAccountNumber().isEmpty()) {
-        return Mono.empty(); // Return an empty Mono to maintain reactive flow
+public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse) {
+    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+
+    // Add existing feature flags
+    featureFlagsMap.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
+            featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
+
+    // Ensure new flag is retained
+    if (orderConfirmationRedesignResponse.getFeatureFlags() != null) {
+        featureFlagsMap.putAll(orderConfirmationRedesignResponse.getFeatureFlags());
     }
 
-    return featureFlagIntegrationService.getFeatureFlagsWithThrottle(ssoJwtDTO.getVzwAccountNumber())
-        .defaultIfEmpty(new HashMap<>()) // If Mono emits null, replace it with an empty map
-        .map(featureFlags -> {
-            featureFlags.put(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG, 
-                             featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
-            return featureFlags;
-        })
-        .doOnNext(orderConfirmationRedesignResponse::setFeatureFlags)
-        .then(); // Returns Mono<Void> to indicate completion
+    log.info("Final featureFlagsMap before setting: {}", featureFlagsMap);
+
+    orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
 }
