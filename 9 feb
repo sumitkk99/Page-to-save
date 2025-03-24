@@ -1,20 +1,8 @@
-public void setFeatureFlags(OrderConfirmationRedesignResponse orderConfirmationRedesignResponse) {
-    if (orderConfirmationRedesignResponse.getFeatureFlags() == null) {
-        orderConfirmationRedesignResponse.setFeatureFlags(new HashMap<>());
-    }
-
-    // Get the existing featureFlags map from response
-    Map<String, Boolean> featureFlagsMap = orderConfirmationRedesignResponse.getFeatureFlags();
-
-    // Ensure `orderConfirmationCloudFixFFlag` is included from the already populated feature flags
-    featureFlagsMap.putAll(orderConfirmationRedesignResponse.getFeatureFlags());
-
-    // Ensure the existing flag is added
-    featureFlagsMap.putIfAbsent(ActivationConstants.SHOW_MULTIPLE_ORDER_NUMBERS_IN_IOC_FLAG,
-            featureFlagIntegrationService.showMultipleOrderNumbersInIOCFFlag());
-
-    log.info("Final featureFlagsMap in setFeatureFlags: {}", featureFlagsMap);
-
-    // Set the updated map back in the response
-    orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
-}
+Optional.ofNullable(orderConfirmationRedesignResponse.getFeatureFlags())
+    .ifPresentOrElse(f -> {
+        log.info("Merging feature flags: {}", featureFlagsMap);
+        f.putAll(featureFlagsMap); // existing flags ke saath merge karna
+    }, () -> {
+        log.info("Setting new feature flags: {}", featureFlagsMap);
+        orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
+    });
