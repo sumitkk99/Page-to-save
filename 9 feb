@@ -1,8 +1,30 @@
-Optional.ofNullable(orderConfirmationRedesignResponse.getFeatureFlags())
-    .ifPresentOrElse(f -> {
-        log.info("Merging feature flags: {}", featureFlagsMap);
-        f.putAll(featureFlagsMap); // existing flags ke saath merge karna
-    }, () -> {
-        log.info("Setting new feature flags: {}", featureFlagsMap);
-        orderConfirmationRedesignResponse.setFeatureFlags(featureFlagsMap);
-    });
+public Mono<Map<String, Boolean>> getFeatureFlagWithThrottle(GetPlansRequest getPlansRequest) {
+    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+
+    String accountNumber = getPlansRequest.getCustomerId();
+    String mtn = getPlansRequest.getMtn();
+
+    log.info("AccountNumber: {}, MTN: {}", accountNumber, mtn);
+
+    if (accountNumber != null && mtn != null) {
+        return featureFlag.isFeatureEnabled(
+            FeatureFlagConstants.AWS_CONFIG_APP_NAME,
+            FeatureFlagConstants.SN_PERK_AWS_CONFIG_PROFILE,
+            FeatureFlagConstants.SECOND_NUMBER_PERK_DISPLAY_FFLAG, 
+            "", 
+            mtn, 
+            "", 
+            accountNumber, 
+            "", 
+            "", 
+            Boolean.FALSE
+        ).map(flag -> {
+            log.info("Feature flag value: {}", flag);
+            featureFlagsMap.put(FeatureFlagConstants.SECOND_NUMBER_PERK_DISPLAY_FFLAG, flag);
+            return featureFlagsMap;
+        });
+    }
+
+    log.warn("Returning empty feature flags map");
+    return Mono.just(featureFlagsMap);
+}
