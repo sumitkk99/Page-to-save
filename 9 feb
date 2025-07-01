@@ -1,30 +1,30 @@
-public Mono<Map<String, Boolean>> getFeatureFlagWithThrottle(GetPlansRequest getPlansRequest) {
-    Map<String, Boolean> featureFlagsMap = new HashMap<>();
+basics qn like
+Java 8 features
+Jdk 8,11,17,21 differences
 
-    String accountNumber = getPlansRequest.getCustomerId();
-    String mtn = getPlansRequest.getMtn();
+Spring boot k crud se qn including jpa connectivity 
 
-    log.info("AccountNumber: {}, MTN: {}", accountNumber, mtn);
+then
+Marker interface 
+Clonable interface 
 
-    if (accountNumber != null && mtn != null) {
-        return featureFlag.isFeatureEnabled(
-            FeatureFlagConstants.AWS_CONFIG_APP_NAME,
-            FeatureFlagConstants.SN_PERK_AWS_CONFIG_PROFILE,
-            FeatureFlagConstants.SECOND_NUMBER_PERK_DISPLAY_FFLAG, 
-            "", 
-            mtn, 
-            "", 
-            accountNumber, 
-            "", 
-            "", 
-            Boolean.FALSE
-        ).map(flag -> {
-            log.info("Feature flag value: {}", flag);
-            featureFlagsMap.put(FeatureFlagConstants.SECOND_NUMBER_PERK_DISPLAY_FFLAG, flag);
-            return featureFlagsMap;
-        });
-    }
+Serialisation and deserialization 
 
-    log.warn("Returning empty feature flags map");
-    return Mono.just(featureFlagsMap);
-}
+Multithreading se qn 
+
+Exception handling-> custom exception handling how we are doing
+
+Design pattern in java as well as spring boot and in project which design Pattern u are using 
+
+Microservices se qn
+Like which microservices architecture u follow in your project 
+
+Fir microservices se ki suppose ek microservices fail hogya then kya hoga uss case me
+
+Mtlb whi load balancer, resilience wagera
+
+And uske baad architecture iska means api gateway se leke service registry tkk poora concept
+
+Saga Pattern both orchestration as well as choreography dono ache se dkh lena
+
+ 
