@@ -1,0 +1,303 @@
+🔴 Deutsche Telekom – RAN-DO Slice Template END-TO-END FLOW
+
+
+🔹 Sabse pehle: Problem kya solve ho rahi hai?
+
+5G me Network Slicing hoti hai
+Matlab:
+	•	Same physical network
+	•	But multiple logical networks (slices)
+	•	ek slice high speed ke liye
+	•	ek slice low latency ke liye
+	•	ek slice IoT ke liye
+
+👉 Question:
+Kaun decide karega slice ka behaviour?
+➡️ Slice Template
+
+⸻
+
+1️⃣ Important Components – Full Form + Role
+
+🟣 RAN-DO
+
+Radio Access Network – Design & Orchestration
+👉 Slice ka design, validation, orchestration karta hai
+
+⸻
+
+🟣 T-NAP
+
+Telekom Network Automation Platform
+👉 UI + orchestration platform
+
+⸻
+
+🟣 MDO
+
+Multi-Domain Orchestrator
+👉 Orders place karta hai (slice create / activate / terminate)
+
+⸻
+
+🟣 SDC
+
+Service Design Component
+👉 Slice template ko runtime me use karta hai
+
+⸻
+
+🟣 NBI
+
+North Bound Interface
+👉 APIs expose karta hai (TMF standards)
+
+⸻
+
+🟣 TMF APIs
+	•	TMF 633 → Service Catalog / Specification
+	•	TMF 641 → Service Order
+
+⸻
+
+2️⃣ Slice Template kya hota hai? (Simple language)
+
+Slice Template ek DESIGN-TIME contract hai
+
+Ye define karta hai:
+	•	Kis type ke slices allowed hain
+	•	Kaunse parameters change ho sakte hain
+	•	Kaunse fixed rahenge
+	•	Default values
+	•	Constraints (limits)
+
+📄 Technically:
+	•	YAML file
+	•	GitLab me stored
+
+Example:
+
+mojo-nsst-template-default.yml
+
+
+⸻
+
+3️⃣ Slice Template ka Creation Flow
+
+STEP 1️⃣ User / Architect
+	•	T-NAP Portal open karta hai
+	•	Slice Template create karta hai
+
+👉 Abhi:
+	•	GUI partially available
+	•	Mostly GitLab YAML hi source of truth hai
+
+⸻
+
+STEP 2️⃣ GitLab (SOURCE OF TRUTH)
+
+Template yahan save hota hai:
+
+ran-do-slice-templates/
+ └── mojo-nsst-template-default.yml
+
+Is YAML me hota hai:
+	•	PLMN info
+	•	SNSSAI
+	•	Coverage
+	•	Throughput
+	•	UE limits
+	•	input true/false
+
+⸻
+
+4️⃣ YAML ke andar kya hota hai? (Deep but simple)
+
+🔹 PLMN Info
+
+PLMN = Public Land Mobile Network
+
+mcc: 262
+mnc: 01
+
+	•	MCC → Mobile Country Code
+	•	MNC → Mobile Network Code
+👉 Network kis operator ka hai
+
+⸻
+
+🔹 SNSSAI
+
+Single Network Slice Selection Assistance Information
+
+sst: integer
+sd: string
+
+	•	SST → Slice Service Type
+	•	SD → Slice Differentiator
+
+👉 Ye milke slice ko uniquely identify karte hain
+
+⸻
+
+🔹 Coverage Area
+
+latitude
+longitude
+altitude
+polygon
+
+👉 Batata hai:
+	•	Slice ka network kaunse area me active hoga
+
+⚠️ Sirf wahi properties allowed:
+	•	Jo actual network configure kar sakta hai
+
+⸻
+
+🔹 Performance Parameters
+
+Download Throughput
+
+dLThptPerSliceSubnet
+
+Upload Throughput
+
+uLThptPerSliceSubnet
+
+Maximum UEs
+
+maxNumberOfUEs
+
+
+⸻
+
+5️⃣ ⭐ MOST IMPORTANT: input: true / false
+
+Ye sabse CRITICAL concept hai 🔥
+
+✅ input: true
+
+➡️ MDO value bhej sakta hai
+➡️ Order payload se value aayegi
+
+❌ input: false
+
+➡️ MDO override nahi kar sakta
+➡️ Template ka value final
+
+🧠 Simple bolu:
+
+input=true → order powerful
+input=false → template powerful
+
+⸻
+
+6️⃣ Default Values & Constraints
+
+Template me likh sakte ho:
+	•	Default values
+	•	Min / Max limit
+
+Example:
+	•	Max UE = 1000
+	•	Guaranteed DL ≤ 5000 Mbps
+
+👉 Agar MDO value nahi bheje:
+➡️ Default use ho jayega
+
+⸻
+
+7️⃣ Template ID – Runtime Key 🔑
+
+Jab template create hota hai:
+	•	Ek unique ID generate hoti hai
+
+Example:
+
+uniqueId: 04564ae3-48cb-4de0-89d0-e7746c76dae8
+
+👉 MDO isi ID ko use karke order place karega
+
+⸻
+
+8️⃣ Order Flow (Real Execution)
+
+STEP 1️⃣ MDO → TMF 633
+	•	Pehle check karta hai:
+	•	Kaunse slice templates available hain
+
+⸻
+
+STEP 2️⃣ MDO → TMF 641 (Service Order)
+
+POST /serviceOrder
+{
+  "serviceSpecification": {
+    "id": "<slice-template-id>"
+  },
+  "serviceCharacteristic": [
+    {
+      "name": "sst",
+      "value": 100
+    }
+  ]
+}
+
+
+⸻
+
+STEP 3️⃣ RAN-DO Validation
+
+RAN-DO kya karta hai:
+	1.	Template ID valid hai?
+	2.	Mandatory values present?
+	3.	input=true values override allowed?
+	4.	Constraints violated?
+	5.	Default values apply karne hain?
+
+❌ Agar kuch galat:
+➡️ Order reject
+
+⸻
+
+STEP 4️⃣ Slice Lifecycle
+
+Order states:
+	•	reserved
+	•	active
+	•	terminated
+
+👉 Network me slice provision ho jata hai
+
+⸻
+
+9️⃣ T-NAP Portal (UI ka role)
+
+Abhi:
+	•	Templates dekh sakte ho
+	•	Edit / delete limited
+	•	GUI work in progress
+
+Final goal:
+	•	YAML ki jagah user-friendly UI
+
+⸻
+
+🔁Reverse KT (Lead ke saamne bolne layak)
+
+“RAN-DO me Slice Templates design-time YAML artifacts hote hain jo GitLab me store hote hain.
+Ye templates define karte hain kaunse slice characteristics configurable hain, unke default values aur constraints.
+
+MDO TMF 641 ke through slice order karta hai by referencing the template ID.
+RAN-DO order ko validate karta hai, defaults apply karta hai, aur network me slice provision karta hai.”
+
+⸻
+
+One-Line Super Memory Trick
+
+Slice Template = Rules
+Service Order = Request
+RAN-DO = Judge + Executor
+
+⸻
