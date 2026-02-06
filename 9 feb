@@ -1,19 +1,411 @@
-# Go to your project root where src folder exists
-cd path\to\INSRestMonProcService
+What is O2Adaptor and why it exists
 
-# Extract only class/interface/enum definitions + annotations + method signatures
-Get-ChildItem -Recurse -Include *.java |
-    Select-String -Pattern '(^\s*(public|protected|private)?\s*(class|interface|enum)\s+\w+)|(^\s*@\w+)|(^\s*(public|protected|private).*\))' |
-    ForEach-Object { $_.Line } |
-    Out-File project-skeleton.txt
------------------
+O2Adaptor is a Spring Boot microservice inside SMO (Service Management & Orchestration).
+Its main responsibility is to act as a bridge between O-Cloud (infrastructure world) and SMO / Kafka-based systems.
+
+In simple words:
+
+O2Adaptor listens to O-Cloud / Simulator notifications, converts them into standard inventory events, and publishes them to Kafka so downstream systems (SO, AAI, RAN Importer) can consume them.
+
+2. High-level system flow (business view)
+O-Cloud / Simulator
+        |
+        |  Notification (HTTP)
+        v
+   O2Adaptor
+        |
+        |  Inventory Events
+        v
+      Kafka
+        |
+        v
+ SO / RAN Importer / AAI
 
 
-# Go to project root where src folder is
-cd path\to\INSRestMonProcService
+O2Adaptor is NOT a UI service, it is an integration & event translation service.
 
-# Export full code of all .java files into one file
-Get-ChildItem -Recurse -Include *.java | 
-    ForEach-Object { Get-Content $_.FullName } |
-    Out-File project-fullcode.txt
+3. O2Adaptor Repository – Logical Breakdown
+Base package
+com.o2ims.adaptor
 
+3.1 Application Entry Point
+O2AdaptorApplication.java
+
+
+Standard Spring Boot bootstrap class
+
+Starts embedded server
+
+No business logic here
+
+3.2 Controllers (API layer)
+
+Purpose: Expose REST endpoints that other systems call.
+
+controller/
+ ├── OCloudController
+ ├── ResourceController
+ ├── ResourcePoolController
+ ├── ResourceTypeController
+ ├── DeploymentManagerController
+ └── SubscriptionController
+
+
+Key points:
+
+These controllers expose callback / CRUD / notification endpoints
+
+They do not handle security (TLS/mTLS handled outside via Istio)
+
+They delegate logic to services
+
+3.3 Client Layer (Outbound calls)
+
+Purpose: Call external systems (Simulator, Inventory, etc.)
+
+client/
+ ├── SimulatorClient
+ ├── SimulatorClientImpl
+ ├── O2InventoryClient
+ └── O2InventoryClientImpl
+
+
+Key points:
+
+Used when O2Adaptor needs to fetch inventory / push updates
+
+Actual HTTP security is handled by Istio sidecar, not Java SSL code
+
+3.4 Service Layer (Business logic)
+
+Purpose: Core orchestration logic
+
+service/
+ ├── O2AdaptorService
+ ├── O2AdaptorServiceImpl
+ ├── O2AdaptorSubscriptionNotificationStorageService
+ ├── O2AdaptorSubscriptionNotificationStorageServiceImpl
+ ├── O2AdaptorOCloudAvailableStorageService
+ ├── O2AdaptorOCloudAvailableStorageServiceImpl
+ ├── O2AdaptorCallbackService
+ └── O2AdaptorCallbackServiceImpl
+
+
+Responsibilities:
+
+Handle incoming notifications
+
+Manage subscription lifecycle
+
+Trigger inventory sync
+
+Prepare Kafka payloads
+
+3.5 Kafka Layer
+
+Purpose: Event-driven communication
+
+kafka/
+ ├── producer/
+ │   ├── O2AdaptorNotificationProducer
+ │   └── InventoryEventProducer
+ ├── consumer/
+ │   └── InventoryEventConsumer
+ └── model/
+     ├── KafkaNotification
+     └── KafkaInventoryMessage
+
+
+Key idea:
+
+O2Adaptor publishes inventory events
+
+Downstream systems consume them
+
+Kafka security is infra-managed (TLS/mTLS if needed)
+
+3.6 DTOs & Entities
+
+Purpose: Data modeling
+
+dto/
+requestdto/
+entities/
+enums/
+
+
+DTOs → API contracts
+
+Entities → Internal domain model
+
+Enums → Status, EventType, SubscriptionStatus
+
+3.7 Config, Constants, Helpers
+config/
+constants/
+helper/
+exceptions/
+
+
+Config: Kafka, RestTemplate/WebClient, Swagger
+
+Constants: API paths, Kafka topics, headers
+
+Helpers: Date, Kafka headers, REST helpers
+
+Exceptions: Centralized error handling
+
+4. Deployment Reality: Kubernetes + Istio
+Important truth:
+
+O2Adaptor security and exposure is NOT handled in Java code.
+It is handled at Kubernetes + Istio level.
+
+5. Why Istio is used
+
+Problems without Istio:
+
+TLS logic in every service
+
+Manual certificate handling
+
+No mTLS
+
+Hardcoded routing
+
+Istio solves:
+
+TLS / mTLS
+
+Traffic routing
+
+Retry / timeout
+
+Zero-trust networking
+
+6. Sidecar concept (CORE CONCEPT)
+
+Every pod has two containers:
+
+Pod
+ ├── O2Adaptor Application
+ └── Envoy Sidecar (Istio proxy)
+
+
+Envoy sidecar handles:
+
+TLS / mTLS
+
+Encryption
+
+Routing
+
+Egress / Ingress control
+
+Application does not know TLS exists.
+
+7. Two-Sidecar Model (what team meant)
+
+Whenever one service talks to another:
+
+Caller Pod
+ ├── App
+ └── Sidecar  ---> encrypted traffic --->
+
+Receiver Pod
+ ├── Sidecar
+ └── App
+
+
+This is called two-sidecar solution.
+
+8. Ingress vs Egress (very important)
+Ingress
+
+Traffic coming into the cluster
+
+Example:
+
+O-Cloud team → O2Adaptor callback URL
+
+
+Handled by:
+
+Istio Ingress Gateway
+
+Gateway + VirtualService
+
+Egress
+
+Traffic going out of the cluster
+
+Example:
+
+O2Adaptor → O-Cloud Simulator / external API
+
+
+Handled by:
+
+Sidecar
+
+ServiceEntry
+
+(Optional) Egress Gateway
+
+9. Gateway vs VirtualService (key confusion resolved)
+Gateway
+
+Defines HOW traffic enters
+
+Port (443)
+
+Protocol (HTTPS)
+
+TLS on/off
+
+Certificate
+
+VirtualService
+
+Defines WHERE traffic goes
+
+URL path
+
+Target service
+
+Routing rules
+
+Flow:
+Request
+ → Gateway (opens door)
+ → VirtualService (routes)
+ → O2Adaptor service
+
+
+That is why team said:
+
+“VirtualService se hoga”
+
+Meaning:
+
+Routing will be done by Istio config, not by application.
+
+10. TLS & HTTPS (basic but critical)
+
+HTTPS = HTTP + TLS
+
+TLS encrypts traffic
+
+Certificates are stored as Kubernetes Secrets
+
+TLS terminates at Ingress Gateway
+
+Inside cluster → HTTP + mTLS via sidecars
+
+11. Exact Task Given by Lead (decoded)
+Statement:
+
+“We need to configure ingress gateway and provide the endpoint details to O-Cloud team so they can connect using the ingress gateway and http-route to the O2 Adaptor service in SMO.”
+
+Meaning:
+
+Expose O2Adaptor securely
+
+Use Istio Ingress Gateway
+
+Route traffic via VirtualService
+
+No Spring Boot code change
+
+Deliver HTTPS endpoint to O-Cloud team
+
+12. Exact YAML configuration you are expected to add
+12.1 Istio Ingress Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: o2adaptor-ingress-gateway
+  namespace: smo
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: o2adaptor-tls-secret
+    hosts:
+    - o2adaptor.smo.example.com
+
+12.2 VirtualService
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: o2adaptor-virtualservice
+  namespace: smo
+spec:
+  hosts:
+  - o2adaptor.smo.example.com
+  gateways:
+  - o2adaptor-ingress-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /o2ims/notification
+    route:
+    - destination:
+        host: o2adaptor
+        port:
+          number: 8081
+
+12.3 Service (already exists)
+apiVersion: v1
+kind: Service
+metadata:
+  name: o2adaptor
+spec:
+  ports:
+  - port: 8081
+    targetPort: 8081
+
+13. Helm Chart Changes
+
+Add Istio templates:
+
+templates/
+ ├── gateway.yaml
+ ├── virtualservice.yaml
+
+
+Drive via values.yaml:
+
+ingress:
+  enabled: true
+  host: o2adaptor.smo.example.com
+  path: /o2ims/notification
+  tlsSecret: o2adaptor-tls-secret
+
+14. What you give to O-Cloud Team (final deliverable)
+Protocol: HTTPS
+Host: o2adaptor.smo.example.com
+Path: /o2ims/notification
+Method: POST
+Port: 443
+TLS: Enabled
+
+15. What you DO NOT change
+
+❌ Spring Boot SSL config
+
+❌ Java business logic
+
+❌ Kafka flow
+
+❌ Controllers
+
+16. One-line executive summary
+
+O2Adaptor is exposed securely using Istio Ingress Gateway and VirtualService, allowing O-Cloud systems to communicate via HTTPS without modifying application code.
