@@ -1,122 +1,14 @@
 package com.enrollment.courseservice.controller;
 
-import com.enrollment.courseservice.entity.Course;
-import com.enrollment.courseservice.service.CourseService;
-import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-
-@RestController
-@RequestMapping("/api/courses")
-public class CourseController {
-
-    private static final Logger logger =
-            LoggerFactory.getLogger(CourseController.class);
-
-    private final CourseService courseService;
-
-    public CourseController(CourseService courseService) {
-        this.courseService = courseService;
-    }
-
-    @PostMapping
-    public ResponseEntity<Course> createCourse(
-            @Valid @RequestBody Course course) {
-
-        logger.info("Received request to create course: {}",
-                course.getTitle());
-
-        Course createdCourse =
-                courseService.createCourse(course);
-
-        logger.info("Course created successfully");
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(createdCourse);
-    }
-
-    @GetMapping
-    public ResponseEntity<List<Course>> getAllCourses() {
-
-        logger.info("Fetching all courses");
-
-        return ResponseEntity.ok(
-                courseService.getAllCourses()
-        );
-    }
-
-    @GetMapping("/active")
-    public ResponseEntity<List<Course>> getActiveCourses() {
-
-        logger.info("Fetching active courses");
-
-        return ResponseEntity.ok(
-                courseService.getActiveCourses()
-        );
-    }
-
-    @GetMapping("/upcoming")
-    public ResponseEntity<?> getUpcomingCourses() {
-
-        logger.info("Fetching upcoming courses");
-
-        List<Course> upcomingCourses =
-                courseService.getUpcomingCourses();
-
-        if (upcomingCourses.isEmpty()) {
-
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body("No upcoming courses found");
-        }
-
-        return ResponseEntity.ok(upcomingCourses);
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getCourseById(
-            @PathVariable Long id) {
-
-        logger.info("Fetching course with id {}", id);
-
-        Course course =
-                courseService.getCourseById(id);
-
-        if (course == null) {
-
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body("Course not found");
-        }
-
-        return ResponseEntity.ok(course);
-    }
-}
-
-
-
-
-
-
-
-xxxxxxxxxxx
-package com.enrollment.courseservice.controller;
-
+import com.enrollment.courseservice.dto.LoginRequest;
 import com.enrollment.courseservice.security.JwtUtil;
-import com.enrollment.courseservice.security.LoginRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.authentication.Authentication;
-import org.springframework.authentication.AuthenticationManager;
-import org.springframework.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -150,7 +42,8 @@ public class AuthController {
                             new UsernamePasswordAuthenticationToken(
                                     loginRequest.getUsername(),
                                     loginRequest.getPassword()
-                            ));
+                            )
+                    );
 
             String role =
                     authentication.getAuthorities()
@@ -176,5 +69,42 @@ public class AuthController {
                     .status(HttpStatus.UNAUTHORIZED)
                     .body("Invalid username or password");
         }
+    }
+}
+
+
+
+
+xxxxxxxxx
+
+package com.enrollment.courseservice.dto;
+
+public class LoginRequest {
+
+    private String username;
+    private String password;
+
+    public LoginRequest() {
+    }
+
+    public LoginRequest(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 }
