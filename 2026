@@ -1,62 +1,73 @@
-Reverse KT – RAN-DO Slice Template (Oral Explanation)
+@Service
+public class CourseService {
 
-“Let me explain my understanding of the RAN-DO Slice Template flow end to end.”
+    private static final Logger logger =
+            LoggerFactory.getLogger(CourseService.class);
 
-⸻
+    private final CourseRepository courseRepository;
+    private final CategoryRepository categoryRepository;
 
-RAN-DO stands for Radio Access Network – Design and Orchestration.
-Its main responsibility is to design, validate, and orchestrate 5G network slices based on predefined slice templates.
+    public CourseService(CourseRepository courseRepository,
+                         CategoryRepository categoryRepository) {
+        this.courseRepository = courseRepository;
+        this.categoryRepository = categoryRepository;
+    }
 
-A Slice Template is a design-time artifact that defines what type of network slices are supported and which slice characteristics can be configured in the network. These templates are written as YAML files and stored in GitLab, which currently acts as the source of truth.
+    @Transactional
+    public Course createCourse(Course course) {
 
-⸻
+        logger.info("Creating course {}", course.getTitle());
 
-Design Time Flow
+        Set<Category> categories = new HashSet<>();
 
-At design time, a user or architect creates a slice template either through the T-NAP Portal or directly in GitLab.
-The template defines:
-	•	PLMN information like MCC and MNC
-	•	Slice identification using SNSSAI, which includes SST and SD
-	•	Coverage area using geo-coordinates
-	•	Performance parameters such as download throughput, upload throughput, and maximum number of UEs
-	•	Default values and constraints for these parameters
+        for (Category category : course.getCategories()) {
 
-Each property in the template also has an input flag, which is very important.
-If input is set to true, the value can be overridden by the MDO during ordering.
-If it is false, the value defined in the template is fixed and cannot be changed by the order.
+            Category existing =
+                    categoryRepository.findByName(category.getName());
 
-⸻
+            if (existing == null) {
+                existing = categoryRepository.save(category);
+            }
 
-Template Identification
+            categories.add(existing);
+        }
 
-When a slice template is created, a unique template ID is generated.
-This ID becomes the key reference that is later used by the MDO when placing a slice order.
+        course.setCategories(categories);
 
-⸻
+        return courseRepository.save(course);
+    }
 
-Runtime / Ordering Flow
+    @Transactional(readOnly = true)
+    public List<Course> getAllCourses() {
+        logger.info("Fetching all courses");
+        return courseRepository.findAll();
+    }
 
-At runtime, the MDO (Multi-Domain Orchestrator) first retrieves available slice specifications using TMF 633.
-To create or activate a slice, MDO sends a Service Order via TMF 641, referencing the slice template ID and providing any configurable characteristics.
+    @Transactional(readOnly = true)
+    public List<Course> getActiveCourses() {
+        return courseRepository.findActiveCourses(LocalDate.now());
+    }
 
-When RAN-DO receives the order, it:
-	•	Validates the order against the slice template
-	•	Checks mandatory fields and constraints
-	•	Applies default values where the MDO has not provided inputs
-	•	Allows or blocks overrides based on the input flag
+    @Transactional(readOnly = true)
+    public List<Course> getUpcomingCourses() {
+        LocalDate today = LocalDate.now();
+        return courseRepository.findByStartDateBetween(
+                today,
+                today.plusDays(30)
+        );
+    }
 
-If validation passes, the slice moves through its lifecycle states such as reserved, active, and eventually terminated, and the network slice is provisioned in the RAN.
+    @Transactional(readOnly = true)
+    public Course getCourseById(Long id) {
 
-⸻
+        Course course = courseRepository
+                .findById(id)
+                .orElse(null);
 
-Role of T-NAP Portal
+        if (course == null) {
+            logger.warn("Course not found with id {}", id);
+        }
 
-The T-NAP Portal provides a UI to view and manage slice templates.
-Currently, the GUI is still a work in progress, so GitLab remains the primary source of truth, and the portal reflects what is defined there.
-
-⸻
-
-Summary Statement (Strong Ending)
-
-“So in summary, the slice template acts as a contract between the MDO and the network.
-MDO can only order and configure slices within the boundaries defined by the template, and RAN-DO ensures validation, consistency, and correct provisioning of the slice.”
+        return course;
+    }
+}
