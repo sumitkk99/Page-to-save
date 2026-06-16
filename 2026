@@ -1,73 +1,180 @@
-@Service
-public class CourseService {
+package com.enrollment.courseservice.controller;
+
+import com.enrollment.courseservice.entity.Course;
+import com.enrollment.courseservice.service.CourseService;
+import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/courses")
+public class CourseController {
 
     private static final Logger logger =
-            LoggerFactory.getLogger(CourseService.class);
+            LoggerFactory.getLogger(CourseController.class);
 
-    private final CourseRepository courseRepository;
-    private final CategoryRepository categoryRepository;
+    private final CourseService courseService;
 
-    public CourseService(CourseRepository courseRepository,
-                         CategoryRepository categoryRepository) {
-        this.courseRepository = courseRepository;
-        this.categoryRepository = categoryRepository;
+    public CourseController(CourseService courseService) {
+        this.courseService = courseService;
     }
 
-    @Transactional
-    public Course createCourse(Course course) {
+    @PostMapping
+    public ResponseEntity<Course> createCourse(
+            @Valid @RequestBody Course course) {
 
-        logger.info("Creating course {}", course.getTitle());
+        logger.info("Received request to create course: {}",
+                course.getTitle());
 
-        Set<Category> categories = new HashSet<>();
+        Course createdCourse =
+                courseService.createCourse(course);
 
-        for (Category category : course.getCategories()) {
+        logger.info("Course created successfully");
 
-            Category existing =
-                    categoryRepository.findByName(category.getName());
-
-            if (existing == null) {
-                existing = categoryRepository.save(category);
-            }
-
-            categories.add(existing);
-        }
-
-        course.setCategories(categories);
-
-        return courseRepository.save(course);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(createdCourse);
     }
 
-    @Transactional(readOnly = true)
-    public List<Course> getAllCourses() {
+    @GetMapping
+    public ResponseEntity<List<Course>> getAllCourses() {
+
         logger.info("Fetching all courses");
-        return courseRepository.findAll();
-    }
 
-    @Transactional(readOnly = true)
-    public List<Course> getActiveCourses() {
-        return courseRepository.findActiveCourses(LocalDate.now());
-    }
-
-    @Transactional(readOnly = true)
-    public List<Course> getUpcomingCourses() {
-        LocalDate today = LocalDate.now();
-        return courseRepository.findByStartDateBetween(
-                today,
-                today.plusDays(30)
+        return ResponseEntity.ok(
+                courseService.getAllCourses()
         );
     }
 
-    @Transactional(readOnly = true)
-    public Course getCourseById(Long id) {
+    @GetMapping("/active")
+    public ResponseEntity<List<Course>> getActiveCourses() {
 
-        Course course = courseRepository
-                .findById(id)
-                .orElse(null);
+        logger.info("Fetching active courses");
 
-        if (course == null) {
-            logger.warn("Course not found with id {}", id);
+        return ResponseEntity.ok(
+                courseService.getActiveCourses()
+        );
+    }
+
+    @GetMapping("/upcoming")
+    public ResponseEntity<?> getUpcomingCourses() {
+
+        logger.info("Fetching upcoming courses");
+
+        List<Course> upcomingCourses =
+                courseService.getUpcomingCourses();
+
+        if (upcomingCourses.isEmpty()) {
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body("No upcoming courses found");
         }
 
-        return course;
+        return ResponseEntity.ok(upcomingCourses);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getCourseById(
+            @PathVariable Long id) {
+
+        logger.info("Fetching course with id {}", id);
+
+        Course course =
+                courseService.getCourseById(id);
+
+        if (course == null) {
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body("Course not found");
+        }
+
+        return ResponseEntity.ok(course);
+    }
+}
+
+
+
+
+
+
+
+xxxxxxxxxxx
+package com.enrollment.courseservice.controller;
+
+import com.enrollment.courseservice.security.JwtUtil;
+import com.enrollment.courseservice.security.LoginRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.authentication.Authentication;
+import org.springframework.authentication.AuthenticationManager;
+import org.springframework.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(AuthController.class);
+
+    private final AuthenticationManager authenticationManager;
+    private final JwtUtil jwtUtil;
+
+    public AuthController(
+            AuthenticationManager authenticationManager,
+            JwtUtil jwtUtil) {
+
+        this.authenticationManager = authenticationManager;
+        this.jwtUtil = jwtUtil;
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(
+            @RequestBody LoginRequest loginRequest) {
+
+        try {
+
+            logger.info("Entered Login Method");
+
+            Authentication authentication =
+                    authenticationManager.authenticate(
+                            new UsernamePasswordAuthenticationToken(
+                                    loginRequest.getUsername(),
+                                    loginRequest.getPassword()
+                            ));
+
+            String role =
+                    authentication.getAuthorities()
+                            .iterator()
+                            .next()
+                            .getAuthority();
+
+            String token =
+                    jwtUtil.generateToken(
+                            loginRequest.getUsername(),
+                            role
+                    );
+
+            logger.info("Login successful");
+
+            return ResponseEntity.ok(token);
+
+        } catch (Exception ex) {
+
+            logger.error("Authentication failed", ex);
+
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("Invalid username or password");
+        }
     }
 }
