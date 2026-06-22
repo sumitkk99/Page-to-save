@@ -1,131 +1,86 @@
-Complete Student Service Code (Based on Existing Structure)
+Fixing Compilation Errors - Complete Solution
 
-I'll provide you with the complete working student service code that matches the existing structure you have.
+The errors you're seeing are due to several issues. Let me provide you with the corrected files. Replace your existing files with these:
 
-1. StudentServiceApplication.java
+1. First, Fix the File Names
 
-```java
-package com.enrollment.studentservice;
+Rename these files to match their class names:
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
-import org.springframework.cloud.openfeign.EnableFeignClients;
+· Course.java → CourseDTO.java (in DTO folder)
+· Category.java → CategoryDTO.java (in DTO folder)
 
-@SpringBootApplication
-@EnableEurekaClient
-@EnableFeignClients
-public class StudentServiceApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(StudentServiceApplication.class, args);
-    }
-}
-```
+---
 
-2. entity/Student.java
+2. Complete Corrected CourseService Files
+
+DTO/CourseRequestDTO.java
 
 ```java
-package com.enrollment.studentservice.entity;
+package com.enrollment.courseservice.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import javax.persistence.*;
-import java.util.ArrayList;
-import java.util.List;
-
-@Entity
-@Table(name = "students")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class Student {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(nullable = false, length = 100)
-    private String name;
-
-    @Column(unique = true, nullable = false, length = 100)
-    private String email;
-
-    @ElementCollection
-    @CollectionTable(name = "student_enrollments", 
-                     joinColumns = @JoinColumn(name = "student_id"))
-    @Column(name = "course_id")
-    private List<Long> enrolledCourseIds = new ArrayList<>();
-
-    @Override
-    public String toString() {
-        return "Student{" +
-                "id=" + id +
-                ", name='" + name + '\'' +
-                ", email='" + email + '\'' +
-                '}';
-    }
-}
-```
-
-3. dto/StudentDTO.java
-
-```java
-package com.enrollment.studentservice.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.util.List;
-
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class StudentDTO {
-    private Long id;
-    private String name;
-    private String email;
-    private List<Long> enrolledCourseIds;
-}
-```
-
-4. dto/StudentRequestDTO.java
-
-```java
-package com.enrollment.studentservice.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class StudentRequestDTO {
-    @NotBlank(message = "Name is mandatory")
-    private String name;
+public class CourseRequestDTO {
+    @NotBlank(message = "Title is mandatory")
+    private String title;
 
-    @NotBlank(message = "Email is mandatory")
-    @Email(message = "Email should be valid")
-    private String email;
+    private String description;
+
+    private BigDecimal price;
+
+    private String duration;
+
+    @NotNull(message = "Start date is mandatory")
+    private LocalDate startDate;
+
+    private LocalDate endDate;
+
+    private List<CategoryDTO> categories;
 }
 ```
 
-5. client/CourseDTO.java
+DTO/CategoryDTO.java
 
 ```java
-package com.enrollment.studentservice.client;
+package com.enrollment.courseservice.dto;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class CategoryDTO {
+    private Long id;
+    private String name;
+}
+```
+
+DTO/CourseDTO.java
+
+```java
+package com.enrollment.courseservice.dto;
+
+import com.enrollment.courseservice.entity.Category;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Set;
 
 @Data
 @NoArgsConstructor
@@ -138,268 +93,223 @@ public class CourseDTO {
     private String duration;
     private LocalDate startDate;
     private LocalDate endDate;
+    private Set<Category> categories;
 }
 ```
 
-6. client/CourseClient.java
+util/JwtUtil.java
 
 ```java
-package com.enrollment.studentservice.client;
+package com.enrollment.courseservice.util;
 
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestHeader;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
-@FeignClient(name = "course-service")
-public interface CourseClient {
-
-    @GetMapping("/api/courses/{id}")
-    CourseDTO getCourseById(@PathVariable("id") Long id);
-
-    @GetMapping("/api/courses/exists/{id}")
-    boolean courseExists(@PathVariable("id") Long id);
-
-    @GetMapping("/api/courses/upcoming")
-    List<CourseDTO> getUpcomingCourses();
-
-    @GetMapping("/api/courses")
-    List<CourseDTO> getAllCourses();
-}
-```
-
-7. repository/StudentRepository.java
-
-```java
-package com.enrollment.studentservice.repository;
-
-import com.enrollment.studentservice.entity.Student;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-
-@Repository
-public interface StudentRepository extends JpaRepository<Student, Long> {
-    Optional<Student> findByEmail(String email);
-    boolean existsByEmail(String email);
-}
-```
-
-8. service/StudentService.java
-
-```java
-package com.enrollment.studentservice.service;
-
-import com.enrollment.studentservice.dto.StudentDTO;
-import com.enrollment.studentservice.dto.StudentRequestDTO;
-import com.enrollment.studentservice.entity.Student;
-
-public interface StudentService {
-    StudentDTO registerStudent(StudentRequestDTO request);
-    StudentDTO enrollStudent(Long studentId, Long courseId);
-    Student getStudentById(Long id);
-    StudentDTO getStudentDTOById(Long id);
-}
-```
-
-9. service/impl/StudentServiceImpl.java
-
-```java
-package com.enrollment.studentservice.service.impl;
-
-import com.enrollment.studentservice.client.CourseClient;
-import com.enrollment.studentservice.dto.StudentDTO;
-import com.enrollment.studentservice.dto.StudentRequestDTO;
-import com.enrollment.studentservice.entity.Student;
-import com.enrollment.studentservice.exception.StudentAlreadyExistsException;
-import com.enrollment.studentservice.exception.StudentNotFoundException;
-import com.enrollment.studentservice.repository.StudentRepository;
-import com.enrollment.studentservice.service.StudentService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class StudentServiceImpl implements StudentService {
+@Component
+public class JwtUtil {
     
-    private final StudentRepository studentRepository;
-    private final CourseClient courseClient;
+    @Value("${jwt.secret}")
+    private String secret;
+    
+    private static final long EXPIRATION_TIME = 86400000; // 24 hours
 
-    @Override
-    @Transactional
-    public StudentDTO registerStudent(StudentRequestDTO request) {
-        log.info("Registering new student with email: {}", request.getEmail());
-        
-        if (studentRepository.existsByEmail(request.getEmail())) {
-            log.warn("Student with email {} already exists", request.getEmail());
-            throw new StudentAlreadyExistsException("Student with email " + request.getEmail() + " already exists");
-        }
-        
-        Student student = new Student();
-        student.setName(request.getName());
-        student.setEmail(request.getEmail());
-        student.setEnrolledCourseIds(new java.util.ArrayList<>());
-        
-        Student savedStudent = studentRepository.save(student);
-        log.info("Student registered successfully with ID: {}", savedStudent.getId());
-        
-        return mapToDTO(savedStudent);
+    public String generateToken(String username, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("role", role);
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .signWith(SignatureAlgorithm.HS256, secret.getBytes())
+                .compact();
     }
 
-    @Override
-    @Transactional
-    public StudentDTO enrollStudent(Long studentId, Long courseId) {
-        log.info("Enrolling student {} in course {}", studentId, courseId);
-        
-        Student student = getStudentById(studentId);
-        
-        // Check if course exists via Feign Client
-        try {
-            boolean courseExists = courseClient.courseExists(courseId);
-            if (!courseExists) {
-                log.warn("Course not found with ID: {}", courseId);
-                throw new RuntimeException("Course not found with id: " + courseId);
-            }
-        } catch (Exception e) {
-            log.error("Error calling Course Service: {}", e.getMessage());
-            throw new RuntimeException("Course service unavailable");
-        }
-        
-        // Check if already enrolled
-        if (student.getEnrolledCourseIds().contains(courseId)) {
-            log.warn("Student {} already enrolled in course {}", studentId, courseId);
-            throw new RuntimeException("Student is already enrolled in this course");
-        }
-        
-        student.getEnrolledCourseIds().add(courseId);
-        Student updatedStudent = studentRepository.save(student);
-        log.info("Student {} enrolled in course {} successfully", studentId, courseId);
-        
-        return mapToDTO(updatedStudent);
+    public Claims parseToken(String token) {
+        return Jwts.parser()
+                .setSigningKey(secret.getBytes())
+                .parseClaimsJws(token)
+                .getBody();
+    }
+}
+```
+
+config/SecurityConfig.java
+
+```java
+package com.enrollment.courseservice.config;
+
+import com.enrollment.courseservice.security.JwtAuthenticationFilter;
+import com.enrollment.courseservice.util.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import org.springframework.http.HttpStatus;
+
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtUtil jwtUtil;
+
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtUtil);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public Student getStudentById(Long id) {
-        log.info("Fetching student by ID: {}", id);
-        return studentRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("Student not found with ID: {}", id);
-                    return new StudentNotFoundException("Student not found with id: " + id);
-                });
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public StudentDTO getStudentDTOById(Long id) {
-        Student student = getStudentById(id);
-        return mapToDTO(student);
-    }
-
-    private StudentDTO mapToDTO(Student student) {
-        return new StudentDTO(
-                student.getId(),
-                student.getName(),
-                student.getEmail(),
-                student.getEnrolledCourseIds()
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return new InMemoryUserDetailsManager(
+            User.withUsername("admin")
+                .password(passwordEncoder().encode("admin123"))
+                .roles("ADMIN")
+                .build(),
+            User.withUsername("user")
+                .password(passwordEncoder().encode("user123"))
+                .roles("USER")
+                .build()
         );
     }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
+        provider.setUserDetailsService(userDetailsService());
+        provider.setPasswordEncoder(passwordEncoder());
+        return provider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public AuthenticationEntryPoint unauthorizedEntryPoint() {
+        return new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authorizeRequests()
+                .antMatchers("/auth/**", "/eureka/**").permitAll()
+                .antMatchers("/api/courses/active", "/api/courses/upcoming").permitAll()
+                .antMatchers("/api/courses/**").hasAnyRole("ADMIN", "USER")
+                .anyRequest().authenticated()
+            .and()
+            .exceptionHandling().authenticationEntryPoint(unauthorizedEntryPoint())
+            .and()
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+        
+        return http.build();
+    }
 }
 ```
 
-10. controller/StudentController.java
+security/JwtAuthenticationFilter.java
 
 ```java
-package com.enrollment.studentservice.controller;
+package com.enrollment.courseservice.security;
 
-import com.enrollment.studentservice.client.CourseClient;
-import com.enrollment.studentservice.dto.StudentDTO;
-import com.enrollment.studentservice.dto.StudentRequestDTO;
-import com.enrollment.studentservice.entity.Student;
-import com.enrollment.studentservice.service.StudentService;
+import com.enrollment.courseservice.util.JwtUtil;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.web.filter.OncePerRequestFilter;
 
-import javax.validation.Valid;
-import java.util.List;
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.ArrayList;
 
-@RestController
-@RequestMapping("/api/students")
 @RequiredArgsConstructor
 @Slf4j
-public class StudentController {
-    
-    private final StudentService studentService;
-    private final CourseClient courseClient;
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    @PostMapping
-    public ResponseEntity<?> createStudent(@Valid @RequestBody StudentRequestDTO request) {
-        log.info("POST /api/students - Registering student with email: {}", request.getEmail());
+    private final JwtUtil jwtUtil;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, 
+                                   HttpServletResponse response, 
+                                   FilterChain chain) 
+                                   throws ServletException, IOException {
+        
+        String header = request.getHeader("Authorization");
+        
+        if (header == null || !header.startsWith("Bearer ")) {
+            chain.doFilter(request, response);
+            return;
+        }
+        
+        String token = header.replace("Bearer ", "");
+        
         try {
-            StudentDTO response = studentService.registerStudent(request);
-            log.info("Student registered with ID: {}", response.getId());
-            return new ResponseEntity<>(response, HttpStatus.CREATED);
+            Claims claims = jwtUtil.parseToken(token);
+            String username = claims.getSubject();
+            String role = claims.get("role", String.class);
+            
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                        username, null, new ArrayList<>());
+                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(auth);
+                log.info("Authentication successful for user: {}", username);
+            }
         } catch (Exception e) {
-            log.error("Error registering student: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+            log.error("Invalid JWT token: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
         }
-    }
-
-    @PutMapping("/{id}/enroll/{courseId}")
-    public ResponseEntity<?> enrollStudent(@PathVariable Long id, @PathVariable Long courseId) {
-        log.info("PUT /api/students/{}/enroll/{} - Enrolling student", id, courseId);
-        try {
-            StudentDTO student = studentService.enrollStudent(id, courseId);
-            log.info("Student enrolled successfully");
-            return ResponseEntity.ok(student);
-        } catch (RuntimeException e) {
-            log.error("Error enrolling student: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
-        }
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getStudentById(@PathVariable Long id) {
-        log.info("GET /api/students/{} - Fetching student", id);
-        try {
-            StudentDTO student = studentService.getStudentDTOById(id);
-            return ResponseEntity.ok(student);
-        } catch (Exception e) {
-            log.warn("Student not found: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        }
-    }
-
-    @GetMapping("/test-feign")
-    public ResponseEntity<?> testFeignCourses(@RequestHeader(value = "Authorization", required = false) String token) {
-        log.info("GET /api/students/test-feign - Testing Feign client");
-        try {
-            List<com.enrollment.studentservice.client.CourseDTO> courses = courseClient.getAllCourses();
-            log.info("Feign client returned {} courses", courses.size());
-            return ResponseEntity.ok(courses);
-        } catch (Exception e) {
-            log.error("Feign client error: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Feign client error: " + e.getMessage());
-        }
+        
+        chain.doFilter(request, response);
     }
 }
 ```
 
-11. controller/AuthController.java
+controller/AuthController.java
 
 ```java
-package com.enrollment.studentservice.controller;
+package com.enrollment.courseservice.controller;
 
-import com.enrollment.studentservice.util.JwtUtil;
+import com.enrollment.courseservice.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -460,412 +370,267 @@ public class AuthController {
 }
 ```
 
-12. config/SecurityConfig.java
+service/impl/CourseServiceImpl.java
 
 ```java
-package com.enrollment.studentservice.config;
+package com.enrollment.courseservice.service.impl;
 
-import com.enrollment.studentservice.filter.JwtAuthFilter;
-import com.enrollment.studentservice.util.JwtUtil;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
-import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
-import org.springframework.http.HttpStatus;
-
-@Configuration
-@EnableWebSecurity
-@RequiredArgsConstructor
-public class SecurityConfig {
-
-    private final JwtUtil jwtUtil;
-
-    @Bean
-    public JwtAuthFilter jwtAuthFilter() {
-        return new JwtAuthFilter(jwtUtil);
-    }
-
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return new InMemoryUserDetailsManager(
-            User.withUsername("admin")
-                .password(passwordEncoder().encode("admin123"))
-                .roles("ADMIN")
-                .build(),
-            User.withUsername("user")
-                .password(passwordEncoder().encode("user123"))
-                .roles("USER")
-                .build()
-        );
-    }
-
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService());
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
-    public AuthenticationEntryPoint unauthorizedEntryPoint() {
-        return new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED);
-    }
-
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf().disable()
-            .cors().disable()
-            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            .and()
-            .authorizeRequests()
-                .antMatchers("/auth/**").permitAll()
-                .antMatchers("/api/students/test-feign").permitAll()
-                .antMatchers("/api/students/**").hasAnyRole("ADMIN", "USER")
-                .anyRequest().authenticated()
-            .and()
-            .exceptionHandling().authenticationEntryPoint(unauthorizedEntryPoint())
-            .and()
-            .addFilterBefore(jwtAuthFilter(), UsernamePasswordAuthenticationFilter.class);
-        
-        return http.build();
-    }
-}
-```
-
-13. filter/JwtAuthFilter.java
-
-```java
-package com.enrollment.studentservice.filter;
-
-import com.enrollment.studentservice.util.JwtUtil;
-import io.jsonwebtoken.Claims;
+import com.enrollment.courseservice.dto.CategoryDTO;
+import com.enrollment.courseservice.dto.CourseDTO;
+import com.enrollment.courseservice.dto.CourseRequestDTO;
+import com.enrollment.courseservice.entity.Category;
+import com.enrollment.courseservice.entity.Course;
+import com.enrollment.courseservice.repository.CategoryRepository;
+import com.enrollment.courseservice.repository.CourseRepository;
+import com.enrollment.courseservice.service.CourseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.util.ArrayList;
+import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+@Service
 @RequiredArgsConstructor
 @Slf4j
-public class JwtAuthFilter extends OncePerRequestFilter {
-
-    private final JwtUtil jwtUtil;
+public class CourseServiceImpl implements CourseService {
+    
+    private final CourseRepository courseRepository;
+    private final CategoryRepository categoryRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, 
-                                   HttpServletResponse response, 
-                                   FilterChain filterChain) 
-                                   throws ServletException, IOException {
+    @Transactional
+    public CourseDTO createCourse(CourseRequestDTO request) {
+        log.info("Creating new course: {}", request.getTitle());
         
-        final String authHeader = request.getHeader("Authorization");
-        String username = null;
-        String jwt = null;
-
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            jwt = authHeader.substring(7);
-            try {
-                Claims claims = jwtUtil.parseToken(jwt);
-                username = claims.getSubject();
-            } catch (Exception ignored) {
-                log.warn("Invalid JWT token");
+        Course course = new Course();
+        course.setTitle(request.getTitle());
+        course.setDescription(request.getDescription());
+        course.setPrice(request.getPrice());
+        course.setDuration(request.getDuration());
+        course.setStartDate(request.getStartDate());
+        course.setEndDate(request.getEndDate());
+        
+        // Process categories
+        Set<Category> categories = new HashSet<>();
+        if (request.getCategories() != null && !request.getCategories().isEmpty()) {
+            for (CategoryDTO catDto : request.getCategories()) {
+                Category category = categoryRepository.findByName(catDto.getName())
+                        .orElseGet(() -> {
+                            Category newCategory = new Category();
+                            newCategory.setName(catDto.getName());
+                            return categoryRepository.save(newCategory);
+                        });
+                categories.add(category);
             }
         }
+        course.setCategories(categories);
+        
+        Course savedCourse = courseRepository.save(course);
+        log.info("Course created successfully with ID: {}", savedCourse.getId());
+        
+        return mapToDTO(savedCourse);
+    }
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            try {
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        username, null, new ArrayList<>());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-                log.info("Authentication successful for user: {}", username);
-            } catch (Exception e) {
-                log.error("Authentication failed: {}", e.getMessage());
-            }
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseDTO> getAllCourses() {
+        log.info("Fetching all courses");
+        List<Course> courses = courseRepository.findAll();
+        log.info("Found {} courses", courses.size());
+        return courses.stream().map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseDTO> getActiveCourses() {
+        log.info("Fetching active courses");
+        LocalDate today = LocalDate.now();
+        List<Course> courses = courseRepository.findActiveCourses(today);
+        log.info("Found {} active courses", courses.size());
+        return courses.stream().map(this::mapToDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseDTO> getUpcomingCourses() {
+        LocalDate today = LocalDate.now();
+        LocalDate thirtyDaysLater = today.plusDays(30);
+        
+        log.info("Fetching upcoming courses from {} to {}", today, thirtyDaysLater);
+        List<Course> courses = courseRepository.findUpcomingCourses(today, thirtyDaysLater);
+        
+        if (courses.isEmpty()) {
+            log.warn("No upcoming courses found");
+        } else {
+            log.info("Found {} upcoming courses", courses.size());
         }
+        
+        return courses.stream().map(this::mapToDTO).collect(Collectors.toList());
+    }
 
-        filterChain.doFilter(request, response);
+    @Override
+    @Transactional(readOnly = true)
+    public Course getCourseById(Long id) {
+        log.info("Fetching course by ID: {}", id);
+        return courseRepository.findById(id)
+                .orElseThrow(() -> {
+                    log.warn("Course not found with ID: {}", id);
+                    return new RuntimeException("Course not found with id: " + id);
+                });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean courseExists(Long id) {
+        boolean exists = courseRepository.existsById(id);
+        log.debug("Course exists check for ID {}: {}", id, exists);
+        return exists;
+    }
+
+    @Override
+    public List<Map<String, Object>> getCourseCountByCategory() {
+        log.info("Fetching course count by category using native SQL query");
+        return courseRepository.countCoursesByCategoryNative();
+    }
+
+    private CourseDTO mapToDTO(Course course) {
+        return new CourseDTO(
+                course.getId(),
+                course.getTitle(),
+                course.getDescription(),
+                course.getPrice(),
+                course.getDuration(),
+                course.getStartDate(),
+                course.getEndDate(),
+                course.getCategories()
+        );
     }
 }
 ```
 
-14. util/JwtUtil.java
+controller/CourseController.java
 
 ```java
-package com.enrollment.studentservice.util;
+package com.enrollment.courseservice.controller;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-
-@Component
-public class JwtUtil {
-    
-    @Value("${jwt.secret}")
-    private String secret;
-    
-    private static final long EXPIRATION_TIME = 86400000; // 24 hours
-
-    public String generateToken(String username, String role) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role);
-        return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(SignatureAlgorithm.HS256, secret.getBytes())
-                .compact();
-    }
-
-    public Claims parseToken(String token) {
-        return Jwts.parser()
-                .setSigningKey(secret.getBytes())
-                .parseClaimsJws(token)
-                .getBody();
-    }
-}
-```
-
-15. exception/StudentNotFoundException.java
-
-```java
-package com.enrollment.studentservice.exception;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
-
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public class StudentNotFoundException extends RuntimeException {
-    public StudentNotFoundException(String message) {
-        super(message);
-    }
-}
-```
-
-16. exception/StudentAlreadyExistsException.java
-
-```java
-package com.enrollment.studentservice.exception;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
-
-@ResponseStatus(HttpStatus.CONFLICT)
-public class StudentAlreadyExistsException extends RuntimeException {
-    public StudentAlreadyExistsException(String message) {
-        super(message);
-    }
-}
-```
-
-17. exception/CourseNotFoundException.java
-
-```java
-package com.enrollment.studentservice.exception;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
-
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public class CourseNotFoundException extends RuntimeException {
-    public CourseNotFoundException(String message) {
-        super(message);
-    }
-}
-```
-
-18. exception/GlobalExceptionHandler.java
-
-```java
-package com.enrollment.studentservice.exception;
-
+import com.enrollment.courseservice.dto.CourseDTO;
+import com.enrollment.courseservice.dto.CourseRequestDTO;
+import com.enrollment.courseservice.entity.Course;
+import com.enrollment.courseservice.service.CourseService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import javax.validation.Valid;
+import java.util.List;
 import java.util.Map;
 
-@ControllerAdvice
+@RestController
+@RequestMapping("/api/courses")
+@RequiredArgsConstructor
 @Slf4j
-public class GlobalExceptionHandler {
+public class CourseController {
+    
+    private final CourseService courseService;
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        log.error("Validation error: {}", errors);
-        return ResponseEntity.badRequest().body(errors);
+    @PostMapping
+    public ResponseEntity<CourseDTO> createCourse(@Valid @RequestBody CourseRequestDTO request) {
+        log.info("POST /api/courses - Creating course: {}", request.getTitle());
+        CourseDTO response = courseService.createCourse(request);
+        log.info("Course created successfully with ID: {}", response.getId());
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
-    @ExceptionHandler(StudentNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleStudentNotFound(StudentNotFoundException ex) {
-        log.error("Student not found: {}", ex.getMessage());
-        Map<String, String> error = new HashMap<>();
-        error.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    @GetMapping
+    public ResponseEntity<List<CourseDTO>> getAllCourses() {
+        log.info("GET /api/courses - Fetching all courses");
+        List<CourseDTO> courses = courseService.getAllCourses();
+        if (courses.isEmpty()) {
+            log.warn("No courses found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        log.info("Found {} courses", courses.size());
+        return ResponseEntity.ok(courses);
     }
 
-    @ExceptionHandler(StudentAlreadyExistsException.class)
-    public ResponseEntity<Map<String, String>> handleStudentAlreadyExists(StudentAlreadyExistsException ex) {
-        log.error("Student already exists: {}", ex.getMessage());
-        Map<String, String> error = new HashMap<>();
-        error.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    @GetMapping("/active")
+    public ResponseEntity<List<CourseDTO>> getActiveCourses() {
+        log.info("GET /api/courses/active - Fetching active courses");
+        List<CourseDTO> courses = courseService.getActiveCourses();
+        if (courses.isEmpty()) {
+            log.warn("No active courses found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        log.info("Found {} active courses", courses.size());
+        return ResponseEntity.ok(courses);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
-        log.error("Runtime exception: {}", ex.getMessage());
-        Map<String, String> error = new HashMap<>();
-        error.put("error", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    @GetMapping("/upcoming")
+    public ResponseEntity<List<CourseDTO>> getUpcomingCourses() {
+        log.info("GET /api/courses/upcoming - Fetching upcoming courses");
+        List<CourseDTO> courses = courseService.getUpcomingCourses();
+        if (courses.isEmpty()) {
+            log.warn("No upcoming courses found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        log.info("Found {} upcoming courses", courses.size());
+        return ResponseEntity.ok(courses);
     }
 
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleGlobalException(Exception ex) {
-        log.error("Unhandled exception: {}", ex.getMessage(), ex);
-        Map<String, String> error = new HashMap<>();
-        error.put("error", "An unexpected error occurred");
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    @GetMapping("/{id}")
+    public ResponseEntity<Course> getCourseById(@PathVariable Long id) {
+        log.info("GET /api/courses/{} - Fetching course", id);
+        Course course = courseService.getCourseById(id);
+        return ResponseEntity.ok(course);
+    }
+
+    @GetMapping("/exists/{id}")
+    public ResponseEntity<Boolean> checkCourseExists(@PathVariable Long id) {
+        log.info("GET /api/courses/exists/{} - Checking if course exists", id);
+        boolean exists = courseService.courseExists(id);
+        return ResponseEntity.ok(exists);
+    }
+
+    @GetMapping("/count-by-category")
+    public ResponseEntity<List<Map<String, Object>>> getCourseCountByCategory() {
+        log.info("GET /api/courses/count-by-category - Fetching course counts by category");
+        List<Map<String, Object>> counts = courseService.getCourseCountByCategory();
+        return ResponseEntity.ok(counts);
     }
 }
 ```
 
-19. application.properties
+CourseServiceApplication.java
 
-```properties
-spring.application.name=student-service
-server.port=8082
+```java
+package com.enrollment.courseservice;
 
-# Database Configuration
-spring.datasource.url=jdbc:mysql://localhost:3307/student_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-spring.datasource.username=root
-spring.datasource.password=root
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
 
-# JPA Configuration
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
-spring.jpa.properties.hibernate.format_sql=true
-
-# Eureka Configuration
-eureka.client.register-with-eureka=true
-eureka.client.fetch-registry=true
-eureka.client.service-url.defaultZone=http://localhost:8762/eureka/
-eureka.instance.prefer-ip-address=true
-eureka.client.registry-fetch-interval-seconds=5
-eureka.instance.lease-renewal-interval-in-seconds=5
-eureka.instance.lease-expiration-duration-in-seconds=10
-
-# JWT Configuration
-jwt.secret=abV5b693b3JsZDEyMzQ1Njg4OTBhYmNkZWZnaG1ga2xtbm9wcxJzdHV2d3hSjejEyMzQ1Njg4OTA=
-
-# Logging Configuration
-logging.level.com.enrollment.studentservice=DEBUG
-logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
-
-# Feign Client Configuration
-feign.client.config.default.connect-timeout=5000
-feign.client.config.default.read-timeout=5000
+@SpringBootApplication
+@EnableEurekaClient
+public class CourseServiceApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(CourseServiceApplication.class, args);
+    }
+}
 ```
 
-20. logback-spring.xml
+---
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<configuration>
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-    
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/student-service.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>logs/student-service.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>30</maxHistory>
-        </rollingPolicy>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-    
-    <logger name="com.enrollment.studentservice" level="DEBUG" additivity="false">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </logger>
-    
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </root>
-</configuration>
-```
+3. Fix pom.xml - Add missing dependencies
 
-21. Dockerfile
-
-```dockerfile
-FROM eclipse-temurin:17-jdk
-VOLUME /tmp
-ARG JAR_FILE=target/student-service.jar
-COPY ${JAR_FILE} app.jar
-ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar"]
-```
-
-22. pom.xml
+course-service/pom.xml
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -883,10 +648,10 @@ ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar
     </parent>
 
     <groupId>com.enrollment</groupId>
-    <artifactId>student-service</artifactId>
+    <artifactId>course-service</artifactId>
     <version>1.0.0</version>
-    <name>student-service</name>
-    <description>Student Management Service</description>
+    <name>course-service</name>
+    <description>Course Management Service</description>
 
     <properties>
         <java.version>17</java.version>
@@ -913,14 +678,6 @@ ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
         <dependency>
             <groupId>mysql</groupId>
@@ -975,57 +732,103 @@ ENTRYPOINT ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app.jar
                 </configuration>
             </plugin>
         </plugins>
-        <finalName>student-service</finalName>
+        <finalName>course-service</finalName>
     </build>
 </project>
 ```
 
 ---
 
-Folder Structure
+4. Clear and Rebuild
 
-```
-student-service/
-├── src/
-│   └── main/
-│       ├── java/
-│       │   └── com/
-│       │       └── enrollment/
-│       │           └── studentservice/
-│       │               ├── StudentServiceApplication.java
-│       │               ├── client/
-│       │               │   ├── CourseClient.java
-│       │               │   └── CourseDTO.java
-│       │               ├── config/
-│       │               │   └── SecurityConfig.java
-│       │               ├── controller/
-│       │               │   ├── AuthController.java
-│       │               │   └── StudentController.java
-│       │               ├── dto/
-│       │               │   ├── StudentDTO.java
-│       │               │   └── StudentRequestDTO.java
-│       │               ├── entity/
-│       │               │   └── Student.java
-│       │               ├── exception/
-│       │               │   ├── CourseNotFoundException.java
-│       │               │   ├── GlobalExceptionHandler.java
-│       │               │   ├── StudentAlreadyExistsException.java
-│       │               │   └── StudentNotFoundException.java
-│       │               ├── filter/
-│       │               │   └── JwtAuthFilter.java
-│       │               ├── repository/
-│       │               │   └── StudentRepository.java
-│       │               ├── service/
-│       │               │   ├── StudentService.java
-│       │               │   └── impl/
-│       │               │       └── StudentServiceImpl.java
-│       │               └── util/
-│       │                   └── JwtUtil.java
-│       └── resources/
-│           ├── application.properties
-│           └── logback-spring.xml
-├── Dockerfile
-└── pom.xml
+```powershell
+# Go to project root
+cd C:\Users\vmadmin\Desktop\Project
+
+# Delete target folders (clean)
+Remove-Item -Recurse -Force .\course-service\target
+Remove-Item -Recurse -Force .\student-service\target
+Remove-Item -Recurse -Force .\eureka-server\target
+Remove-Item -Recurse -Force .\gateway-service\target
+
+# Now build again
+cd course-service
+mvn clean compile -DskipTests
+cd ..
+
+cd student-service
+mvn clean compile -DskipTests
+cd ..
+
+cd eureka-server
+mvn clean compile -DskipTests
+cd ..
+
+cd gateway-service
+mvn clean compile -DskipTests
+cd ..
 ```
 
-This is the complete Student Service code that matches your existing structure. All files include proper imports, package names, annotations, and logging. You can copy and paste these files directly into your project.
+---
+
+5. Quick Build Script (build-fix.ps1)
+
+Create this file and run it:
+
+```powershell
+# build-fix.ps1
+Write-Host "Cleaning and Building All Services..." -ForegroundColor Cyan
+
+# Clean
+Write-Host "Cleaning target folders..." -ForegroundColor Yellow
+Remove-Item -Recurse -Force .\course-service\target -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\student-service\target -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\eureka-server\target -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\gateway-service\target -ErrorAction SilentlyContinue
+
+# Build Course Service
+Write-Host "Building Course Service..." -ForegroundColor Yellow
+Set-Location course-service
+mvn clean package -DskipTests
+Set-Location ..
+
+# Build Student Service
+Write-Host "Building Student Service..." -ForegroundColor Yellow
+Set-Location student-service
+mvn clean package -DskipTests
+Set-Location ..
+
+# Build Eureka Server
+Write-Host "Building Eureka Server..." -ForegroundColor Yellow
+Set-Location eureka-server
+mvn clean package -DskipTests
+Set-Location ..
+
+# Build Gateway Service
+Write-Host "Building Gateway Service..." -ForegroundColor Yellow
+Set-Location gateway-service
+mvn clean package -DskipTests
+Set-Location ..
+
+Write-Host "All services built successfully!" -ForegroundColor Green
+```
+
+Run it:
+
+```powershell
+.\build-fix.ps1
+```
+
+---
+
+Summary of Fixes Made:
+
+1. Fixed file names - Renamed Course.java to CourseDTO.java and Category.java to CategoryDTO.java
+2. Added missing imports - Added import lombok.extern.slf4j.Slf4j for @Slf4j
+3. Fixed JwtAuthenticationFilter - Changed constructor to accept JwtUtil only
+4. Fixed CourseController - Changed CourseRequest to CourseRequestDTO
+5. Fixed CourseServiceImpl - Updated all method calls to use correct DTO names
+6. Added missing dependencies in pom.xml
+7. Removed duplicate annotations in SecurityConfig
+
+Now run the build commands again and everything should compile successfully!
