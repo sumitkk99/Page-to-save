@@ -1,4 +1,2 @@
- cd /home/ubuntu/sumit/o2adaptor
-
-grep -n -B 5 -A 12 -E \
-'aai-client|aai.version|<repositories>' pom.xml
+mvn dependency:tree \
+-Dincludes=de.telekom.tnap.so:aai-client
