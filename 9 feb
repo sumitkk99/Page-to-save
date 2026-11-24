@@ -1,8 +1,4 @@
  cd /home/ubuntu/sumit/o2adaptor
 
-git branch --show-current
-
-git status --short
-
-find ~/.m2/repository -type f \
-  -iname '*2.0.0-d5dd0f09*' 2>/dev/null
+grep -n -B 5 -A 12 -E \
+'aai-client|aai.version|<repositories>' pom.xml
